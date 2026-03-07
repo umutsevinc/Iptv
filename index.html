@@ -140,33 +140,32 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   <main class="main" id="mainContent">
     <div class="loading-screen" id="loadingScreen">
       <div class="spinner"></div>
-      <div>Chargement des chaînes (7 sources)…</div>
+      <div>Chargement des chaînes…</div>
     </div>
   </main>
 </div>
 
 <script>
 const PLAYLIST_URLS=[
-  // France en priorité
-  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8',
-  // Turquie — TRT officiels
-  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_turkey.m3u8',
-  // Turquie — chaînes complètes (Show TV, ATV, Kanal D, Star TV, beIN TR, FOX…)
-  'https://raw.githubusercontent.com/mik25/andy/main/Playlist-Turkish.m3u8',
-  // beIN Sports 1-13 (arabe/international)
-  'https://raw.githubusercontent.com/slmans313/IPTV/master/Bein_Sports.m3u8',
-  // iptv-org Turquie (224 chaînes turques)
+  // ── Catégories iptv-org ──
+  'https://iptv-org.github.io/iptv/categories/sports.m3u',
+  'https://iptv-org.github.io/iptv/categories/news.m3u',
+  'https://iptv-org.github.io/iptv/categories/movies.m3u',
+  'https://iptv-org.github.io/iptv/categories/music.m3u',
+  'https://iptv-org.github.io/iptv/categories/documentary.m3u',
+  'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
+  'https://iptv-org.github.io/iptv/categories/kids.m3u',
+  // ── Pays prioritaires ──
+  'https://iptv-org.github.io/iptv/countries/fr.m3u',
   'https://iptv-org.github.io/iptv/countries/tr.m3u',
-  // Playlist mondiale Free-TV
+  // ── Free-TV (chaînes vérifiées) ──
   'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
-  // iptv-org — 8000+ chaînes mondiales
-  'https://iptv-org.github.io/iptv/index.m3u'
 ];
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
 let categories=new Map();
-let currentCat='Toutes 📺';
+let currentCat='Toutes';
 let currentChannel=null;
 let hlsInstance=null;
 let searchQuery='';
@@ -187,6 +186,10 @@ function parseM3U(text,startId){
       urlLine=candidate;break;
     }
     if(!urlLine)continue;
+    // Skip non-streamable URLs
+    if(!urlLine.startsWith('http'))continue;
+    if(/\.(mpd|mp4|mkv|avi)(\?|$)/i.test(urlLine))continue;
+    if(/youtube\.com|youtu\.be|dailymotion\.com/i.test(urlLine))continue;
 
     const name=line.split(',').slice(1).join(',').trim();
     if(!name)continue;
@@ -199,7 +202,7 @@ function parseM3U(text,startId){
     channels.push({
       id:id++,
       name:name,
-      group:groupMatch?groupMatch[1]:'Other',
+      group:cleanGroup(groupMatch?groupMatch[1]:''),
       logo:logoMatch?logoMatch[1]:'',
       country:countryMatch?countryMatch[1]:'',
       language:langMatch?langMatch[1]:'',
@@ -209,14 +212,45 @@ function parseM3U(text,startId){
   return channels;
 }
 
+// ── Normalize category names ──
+const CAT_MAP={
+  'sports':'Sport','sport':'Sport','deportes':'Sport','spor':'Sport',
+  'news':'Info','information':'Info','actualités':'Info','noticias':'Info','haber':'Info','haberler':'Info',
+  'movies':'Films','movie':'Films','cinema':'Films','cinéma':'Films','film':'Films','películas':'Films',
+  'music':'Musique','musique':'Musique','música':'Musique','müzik':'Musique',
+  'documentary':'Documentaire','documentaire':'Documentaire','documental':'Documentaire','belgesel':'Documentaire',
+  'entertainment':'Divertissement','divertissement':'Divertissement','entretenimiento':'Divertissement','eğlence':'Divertissement',
+  'kids':'Enfants','children':'Enfants','infantil':'Enfants','çocuk':'Enfants','enfants':'Enfants',
+  'education':'Éducation','éducation':'Éducation','educación':'Éducation','eğitim':'Éducation',
+  'religious':'Religion','religion':'Religion','religión':'Religion','dini':'Religion',
+  'lifestyle':'Lifestyle','culture':'Culture','food':'Cuisine','cooking':'Cuisine',
+  'travel':'Voyage','weather':'Météo','business':'Business','science':'Science',
+  'comedy':'Comédie','animation':'Animation','classic':'Classique','drama':'Drame',
+  'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre','diversos':'Autre',
+  'auto':'Auto','outdoor':'Nature','xxx':'Adulte','shop':'Shopping','legislative':'Politique',
+  'series':'Séries'
+};
+
+function cleanGroup(raw){
+  if(!raw)return 'Autre';
+  const low=raw.toLowerCase().trim();
+  if(CAT_MAP[low])return CAT_MAP[low];
+  // Try partial match
+  for(const[key,val] of Object.entries(CAT_MAP)){
+    if(low.includes(key))return val;
+  }
+  // Capitalize first letter
+  return raw.charAt(0).toUpperCase()+raw.slice(1);
+}
+
 // ── Build categories from group-title ──
 function buildCategories(){
   categories=new Map();
-  categories.set('Toutes 📺',CHANNELS);
+  categories.set('Toutes',CHANNELS);
 
   const groups=new Map();
   CHANNELS.forEach(ch=>{
-    const g=ch.group||'Other';
+    const g=ch.group||'Autre';
     if(!groups.has(g))groups.set(g,[]);
     groups.get(g).push(ch);
   });
@@ -244,7 +278,7 @@ function renderCats(){
   el.innerHTML='';
   categories.forEach((chs,cat)=>{
     const filtered=searchQuery?chs.filter(matchSearch):chs;
-    if(filtered.length===0&&cat!=='Toutes 📺')return;
+    if(filtered.length===0&&cat!=='Toutes')return;
     const btn=document.createElement('button');
     btn.className='cat-btn'+(cat===currentCat?' active':'');
     btn.innerHTML=cat+'<span class="cat-count">'+filtered.length+'</span>';
@@ -260,7 +294,7 @@ function matchSearch(ch){
 }
 
 function getVisible(){
-  const list=currentCat==='Toutes 📺'?CHANNELS:categories.get(currentCat)||[];
+  const list=currentCat==='Toutes'?CHANNELS:categories.get(currentCat)||[];
   return searchQuery?list.filter(matchSearch):list;
 }
 

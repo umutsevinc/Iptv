@@ -125,13 +125,20 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   <main class="main" id="mainContent">
     <div class="loading-screen" id="loadingScreen">
       <div class="spinner"></div>
-      <div>Chargement des chaînes…</div>
+      <div>Chargement des chaînes (3 sources)…</div>
     </div>
   </main>
 </div>
 
 <script>
-const PLAYLIST_URL='https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8';
+const PLAYLIST_URLS=[
+  // France en priorité
+  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_france.m3u8',
+  // Playlist mondiale Free-TV
+  'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
+  // iptv-org — 8000+ chaînes mondiales
+  'https://iptv-org.github.io/iptv/index.m3u'
+];
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
@@ -142,10 +149,10 @@ let hlsInstance=null;
 let searchQuery='';
 
 // ── M3U8 Parser ──
-function parseM3U(text){
+function parseM3U(text,startId){
   const lines=text.split('\n');
   const channels=[];
-  let id=0;
+  let id=startId||0;
   for(let i=0;i<lines.length;i++){
     const line=lines[i].trim();
     if(!line.startsWith('#EXTINF'))continue;
@@ -409,41 +416,59 @@ function showPlayer(){
   `;
 }
 
-async function init(){
+async function fetchPlaylist(url){
   try{
-    const res=await fetch(PLAYLIST_URL);
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const text=await res.text();
-    CHANNELS=parseM3U(text);
+    const res=await fetch(url);
+    if(res.ok)return await res.text();
+  }catch(e){}
+  // Fallback via CORS proxy
+  try{
+    const res=await fetch(CORS_PROXIES[0]+encodeURIComponent(url));
+    if(res.ok)return await res.text();
+  }catch(e){}
+  return '';
+}
 
-    if(CHANNELS.length===0)throw new Error('Aucune chaîne trouvée');
+function updateUI(){
+  buildCategories();
+  document.getElementById('stats').textContent=CHANNELS.length+' chaînes • '+(categories.size-1)+' catégories';
+  showPlayer();
+  renderCats();
+  renderChannelList();
+  renderGrid();
+}
 
-    buildCategories();
+async function init(){
+  const seen=new Set();
+  let loaded=0;
 
-    document.getElementById('stats').textContent=CHANNELS.length+' chaînes • '+categories.size+' catégories';
-
-    showPlayer();
-    renderCats();
-    renderChannelList();
-    renderGrid();
-  }catch(err){
-    // Try via CORS proxy
-    try{
-      const res=await fetch(CORS_PROXIES[0]+encodeURIComponent(PLAYLIST_URL));
-      const text=await res.text();
-      CHANNELS=parseM3U(text);
-      if(CHANNELS.length===0)throw new Error('empty');
-      buildCategories();
-      document.getElementById('stats').textContent=CHANNELS.length+' chaînes • '+categories.size+' catégories';
-      showPlayer();
-      renderCats();
-      renderChannelList();
-      renderGrid();
-    }catch(e2){
-      document.getElementById('mainContent').innerHTML=
-        '<div class="loading-screen"><div class="icon" style="font-size:48px">❌</div><div>Impossible de charger la playlist<br><small>'+err.message+'</small></div></div>';
+  // Load all playlists (France first, then world)
+  for(const url of PLAYLIST_URLS){
+    const text=await fetchPlaylist(url);
+    if(!text)continue;
+    const parsed=parseM3U(text,CHANNELS.length);
+    // Deduplicate by URL
+    for(const ch of parsed){
+      if(seen.has(ch.url))continue;
+      seen.add(ch.url);
+      CHANNELS.push(ch);
+    }
+    loaded++;
+    // Show UI as soon as first playlist loads
+    if(loaded===1&&CHANNELS.length>0){
+      updateUI();
     }
   }
+
+  if(CHANNELS.length===0){
+    document.getElementById('mainContent').innerHTML=
+      '<div class="loading-screen"><div class="icon" style="font-size:48px">❌</div><div>Impossible de charger les playlists</div></div>';
+    return;
+  }
+
+  // Re-assign IDs after dedup
+  CHANNELS.forEach((ch,i)=>ch.id=i);
+  updateUI();
 }
 
 // Search

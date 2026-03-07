@@ -166,10 +166,12 @@ CHANNELS.forEach(ch=>{
   categories.get(cat).push(ch);
 });
 
+const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 let currentCat='Toutes \ud83d\udcfa';
 let currentChannel=null;
 let hlsInstance=null;
 let searchQuery='';
+let proxyAttempt=0;
 
 // Stats
 document.getElementById('stats').textContent=CHANNELS.length+' cha\u00eenes \u2022 '+new Set(CHANNELS.map(c=>c.group)).size+' pays';
@@ -247,10 +249,7 @@ function showErr(ch){
   const isMPD=url.includes('.mpd');
 
   let icon,msg;
-  if(ch.geo){
-    icon='\ud83c\udf0d';
-    msg='<strong>'+ch.name+'</strong><br>Cha\u00eene g\u00e9o-bloqu\u00e9e \u2014 VPN requis<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a>';
-  }else if(isYT){
+  if(isYT){
     icon='\ud83d\udcfa';
     msg='<strong>'+ch.name+'</strong><br>Flux Dailymotion / YouTube<br><a href="'+url+'" target="_blank" rel="noopener">Ouvrir dans le navigateur</a>';
   }else if(isMPD){
@@ -258,9 +257,40 @@ function showErr(ch){
     msg='<strong>'+ch.name+'</strong><br>Format DASH (non support\u00e9 dans le navigateur)<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a> \u00b7 Ouvrir avec VLC';
   }else{
     icon='\u26a0\ufe0f';
-    msg='<strong>'+ch.name+'</strong><br>Flux bloqu\u00e9 (CORS ou indisponible)<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a> \u00b7 <a href="vlc://'+url+'">VLC</a>';
+    msg='<strong>'+ch.name+'</strong><br>Flux indisponible ou serveur hors ligne<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a> \u00b7 <a href="vlc://'+url+'">VLC</a>';
   }
   overlay.innerHTML='<div class="icon">'+icon+'</div><div class="msg">'+msg+'</div>';
+}
+
+function proxyUrl(url,proxyIdx){
+  const encoded=encodeURIComponent(url);
+  return CORS_PROXIES[proxyIdx]+encoded;
+}
+
+function startHls(ch,url,vid,overlay,attempt){
+  if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
+  hlsInstance=new Hls({enableWorker:true,lowLatencyMode:true,
+    xhrSetup:function(xhr,xhrUrl){
+      // For proxied requests, we need to handle redirects
+      xhr.withCredentials=false;
+    }
+  });
+  hlsInstance.loadSource(url);
+  hlsInstance.attachMedia(vid);
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>{
+    overlay.classList.add('hidden');
+    vid.play().catch(()=>{});
+  });
+  hlsInstance.on(Hls.Events.ERROR,(e,data)=>{
+    if(!data.fatal)return;
+    // Try next CORS proxy
+    if(attempt<CORS_PROXIES.length){
+      const proxied=proxyUrl(ch.url,attempt);
+      startHls(ch,proxied,vid,overlay,attempt+1);
+    }else{
+      showErr(ch);
+    }
+  });
 }
 
 function play(id){
@@ -295,16 +325,20 @@ function play(id){
     return;
   }
 
-  overlay.classList.add('hidden');
+  // Show loading state
+  overlay.classList.remove('hidden');
+  overlay.innerHTML='<div class="icon">\u23f3</div><div class="msg">Chargement de <strong>'+ch.name+'</strong>...</div>';
+
+  // Fix http:// mixed content — proxy through CORS proxy which serves https
+  const safeUrl=url.startsWith('http://')?proxyUrl(url,0):url;
+  const startAttempt=url.startsWith('http://')?1:0;
 
   if(typeof Hls!=='undefined'&&Hls.isSupported()){
-    hlsInstance=new Hls({enableWorker:true,lowLatencyMode:true});
-    hlsInstance.loadSource(url);
-    hlsInstance.attachMedia(vid);
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>vid.play().catch(()=>showErr(ch)));
-    hlsInstance.on(Hls.Events.ERROR,(e,data)=>{if(data.fatal)showErr(ch)});
+    startHls(ch,safeUrl,vid,overlay,startAttempt);
   }else if(vid.canPlayType('application/vnd.apple.mpegurl')){
-    vid.src=url;
+    // Safari native — no CORS issue for HLS
+    overlay.classList.add('hidden');
+    vid.src=safeUrl;
     vid.load();
     vid.play().catch(()=>showErr(ch));
     vid.onerror=()=>showErr(ch);

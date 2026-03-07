@@ -147,6 +147,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <script>
 const PLAYLIST_URLS=[
+  // ── Turquie (chaînes avec streams vérifiés) ──
+  'https://raw.githubusercontent.com/hayatiptv/iptv/master/index.m3u',
+  'https://raw.githubusercontent.com/hayatiptv/iptv/master/SPORTV.m3u',
   // ── Catégories iptv-org ──
   'https://iptv-org.github.io/iptv/categories/sports.m3u',
   'https://iptv-org.github.io/iptv/categories/news.m3u',
@@ -161,6 +164,7 @@ const PLAYLIST_URLS=[
   // ── Free-TV (chaînes vérifiées) ──
   'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
 ];
+const EPG_URL='https://iptv-epg.org/files/epg-tr.xml.gz';
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
@@ -216,7 +220,7 @@ function parseM3U(text,startId){
 const CAT_MAP={
   'sports':'Sport','sport':'Sport','deportes':'Sport','spor':'Sport',
   'news':'Info','information':'Info','actualités':'Info','noticias':'Info','haber':'Info','haberler':'Info',
-  'movies':'Films','movie':'Films','cinema':'Films','cinéma':'Films','film':'Films','películas':'Films',
+  'movies':'Films','movie':'Films','cinema':'Films','cinéma':'Films','film':'Films','películas':'Films','sinema':'Films',
   'music':'Musique','musique':'Musique','música':'Musique','müzik':'Musique',
   'documentary':'Documentaire','documentaire':'Documentaire','documental':'Documentaire','belgesel':'Documentaire',
   'entertainment':'Divertissement','divertissement':'Divertissement','entretenimiento':'Divertissement','eğlence':'Divertissement',
@@ -228,16 +232,27 @@ const CAT_MAP={
   'comedy':'Comédie','animation':'Animation','classic':'Classique','drama':'Drame',
   'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre','diversos':'Autre',
   'auto':'Auto','outdoor':'Nature','xxx':'Adulte','shop':'Shopping','legislative':'Politique',
-  'series':'Séries'
+  'series':'Séries',
+  // Turkish group names from hayatiptv
+  'ulusal':'Turquie','turk hd+ line':'Turquie','türk':'Turquie',
+  'eski̇ usul':'Turquie','eski usul':'Turquie','eskİ usul':'Turquie',
+  'radyo':'Radio','radyo türk':'Radio',
+  'bölgesel':'Régional','yerel':'Régional',
+  'cocuk':'Enfants','animasyon':'Animation',
+  'belge':'Documentaire','doğa':'Nature'
 };
 
 function cleanGroup(raw){
   if(!raw)return 'Autre';
-  const low=raw.toLowerCase().trim();
+  const low=raw.toLowerCase().trim()
+    .replace(/İ/g,'i').replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c');
+  // Normalize Turkish İ in original too
+  const lowOrig=raw.toLowerCase().trim();
+  if(CAT_MAP[lowOrig])return CAT_MAP[lowOrig];
   if(CAT_MAP[low])return CAT_MAP[low];
   // Try partial match
   for(const[key,val] of Object.entries(CAT_MAP)){
-    if(low.includes(key))return val;
+    if(low.includes(key)||lowOrig.includes(key))return val;
   }
   // Capitalize first letter
   return raw.charAt(0).toUpperCase()+raw.slice(1);

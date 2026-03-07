@@ -55,7 +55,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 /* Main */
 .main{flex:1;padding:20px;display:flex;flex-direction:column;gap:20px;min-width:0}
 
-/* Player */
+/* Player — sticky */
+.player-section{position:sticky;top:56px;z-index:50;background:var(--bg);padding-bottom:8px}
 .player-wrap{position:relative;width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden;margin:0 auto}
 .player-wrap video{width:100%;height:100%;object-fit:contain;background:#000}
 .player-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.85);gap:12px;text-align:center;padding:20px}
@@ -66,6 +67,18 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .player-overlay a:hover{text-decoration:underline}
 .now-playing{text-align:center;font-size:14px;color:var(--text2)}
 .now-playing strong{color:var(--text);font-weight:600}
+
+/* Channel nav bar (prev / next) */
+.channel-nav{display:none;max-width:900px;margin:8px auto 0;align-items:center;gap:8px}
+.channel-nav.visible{display:flex}
+.nav-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.nav-btn:hover{border-color:var(--accent);background:var(--surface)}
+.nav-btn:active{transform:scale(.97)}
+.nav-btn svg{width:16px;height:16px;flex-shrink:0}
+.nav-btn .nav-name{max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.nav-current{flex:1;text-align:center;min-width:0}
+.nav-current-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-current-group{font-size:11px;color:var(--text2)}
 
 /* Grid */
 .grid-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--text2)}
@@ -96,6 +109,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
   .card{padding:10px}
   .player-wrap{border-radius:8px}
+  .nav-btn .nav-name{max-width:60px}
+  .nav-btn{padding:6px 10px;font-size:12px}
 }
 </style>
 </head>
@@ -356,12 +371,17 @@ function play(id){
   currentChannel=ch;
   renderChannelList();
   renderGrid();
+  updateNav();
 
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('backdrop').classList.remove('open');
 
   document.getElementById('nowPlaying').innerHTML='En cours : <strong>'+ch.name+'</strong> — '+ch.group;
+
+  // Scroll player into view
+  const ps=document.getElementById('playerSection');
+  if(ps)ps.scrollIntoView({behavior:'smooth',block:'start'});
 
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
 
@@ -417,17 +437,58 @@ function play(id){
 function showPlayer(){
   const main=document.getElementById('mainContent');
   main.innerHTML=`
-    <div class="player-wrap">
-      <video id="player" controls playsinline webkit-playsinline autoplay></video>
-      <div class="player-overlay" id="overlay">
-        <div class="icon">📡</div>
-        <div class="msg">Sélectionnez une chaîne pour démarrer</div>
+    <div class="player-section" id="playerSection">
+      <div class="player-wrap">
+        <video id="player" controls playsinline webkit-playsinline autoplay></video>
+        <div class="player-overlay" id="overlay">
+          <div class="icon">📡</div>
+          <div class="msg">Sélectionnez une chaîne pour démarrer</div>
+        </div>
+      </div>
+      <div class="now-playing" id="nowPlaying"></div>
+      <div class="channel-nav" id="channelNav">
+        <button class="nav-btn" id="prevBtn" title="Chaîne précédente">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          <span class="nav-name" id="prevName"></span>
+        </button>
+        <div class="nav-current">
+          <div class="nav-current-name" id="navCurrentName"></div>
+          <div class="nav-current-group" id="navCurrentGroup"></div>
+        </div>
+        <button class="nav-btn" id="nextBtn" title="Chaîne suivante">
+          <span class="nav-name" id="nextName"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
       </div>
     </div>
-    <div class="now-playing" id="nowPlaying"></div>
     <div class="grid-title" id="gridTitle">Toutes les chaînes</div>
     <div class="grid" id="grid"></div>
   `;
+}
+
+function getNeighbors(){
+  const visible=getVisible();
+  if(!currentChannel||visible.length===0)return{prev:null,next:null};
+  const idx=visible.findIndex(c=>c.id===currentChannel.id);
+  if(idx===-1)return{prev:visible[visible.length-1],next:visible[0]};
+  return{
+    prev:idx>0?visible[idx-1]:visible[visible.length-1],
+    next:idx<visible.length-1?visible[idx+1]:visible[0]
+  };
+}
+
+function updateNav(){
+  const nav=document.getElementById('channelNav');
+  if(!nav)return;
+  if(!currentChannel){nav.classList.remove('visible');return}
+  nav.classList.add('visible');
+  const{prev,next}=getNeighbors();
+  document.getElementById('navCurrentName').textContent=currentChannel.name;
+  document.getElementById('navCurrentGroup').textContent=currentChannel.group;
+  document.getElementById('prevName').textContent=prev?prev.name:'';
+  document.getElementById('nextName').textContent=next?next.name:'';
+  document.getElementById('prevBtn').onclick=prev?()=>play(prev.id):null;
+  document.getElementById('nextBtn').onclick=next?()=>play(next.id):null;
 }
 
 async function fetchPlaylist(url){

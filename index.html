@@ -183,27 +183,32 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   opacity:0;transition:opacity .2s;
 }
 .mini-player:hover .mini-player-controls{opacity:1}
-/* ═══ FAKE FULLSCREEN (TV / fallback) ═══ */
-.mini-player.fake-fs{
+/* ═══ FULLSCREEN COMMON (native + fake) ═══ */
+.mini-player.fs-active{
   position:fixed!important;inset:0!important;width:100%!important;height:100%!important;
   max-width:100%!important;max-height:100%!important;border-radius:0!important;
   transform:none!important;opacity:1!important;z-index:9999!important;
 }
-.mini-player.fake-fs .mini-player-video{width:100%;height:100%;aspect-ratio:auto;object-fit:contain}
-.mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{opacity:1}
-.mini-player.fake-fs:not(:hover) .mini-player-header,.mini-player.fake-fs:not(:hover) .mini-player-controls{opacity:0}
-.mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{transition:opacity .3s}
+.mini-player.fs-active .mini-player-video{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  aspect-ratio:auto;object-fit:contain;
+  transition:left .3s ease,width .3s ease;
+}
+.mini-player.fs-active .mini-player-header,
+.mini-player.fs-active .mini-player-controls{opacity:0;transition:opacity .3s}
+.mini-player.fs-active:hover .mini-player-header,
+.mini-player.fs-active:hover .mini-player-controls{opacity:1}
 
 /* ═══ FULLSCREEN CHANNEL SIDEBAR ═══ */
 .fs-sidebar{
   display:none;position:absolute;top:0;left:0;bottom:0;width:320px;
-  background:rgba(10,10,15,.95);z-index:10;flex-direction:column;
+  background:rgba(10,10,15,.95);z-index:15;flex-direction:column;
   border-right:1px solid rgba(255,255,255,.1);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   transform:translateX(-100%);transition:transform .3s ease;
 }
+.mini-player.fs-active .fs-sidebar{display:flex}
 .fs-sidebar.open{transform:translateX(0)}
-:fullscreen .fs-sidebar,.fake-fs .fs-sidebar{display:flex}
 .fs-sidebar-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);
@@ -216,13 +221,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   display:flex;align-items:center;justify-content:center;
 }
 .fs-sidebar-close:hover{background:rgba(255,255,255,.25)}
-.fs-sidebar-search{
-  padding:8px 16px;flex-shrink:0;
-}
+.fs-sidebar-search{padding:8px 16px;flex-shrink:0}
 .fs-sidebar-search input{
   width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.08);color:#fff;font-size:13px;
-  font-family:'Inter',sans-serif;outline:none;
+  font-family:'Inter',sans-serif;outline:none;box-sizing:border-box;
 }
 .fs-sidebar-search input::placeholder{color:rgba(255,255,255,.4)}
 .fs-sidebar-search input:focus{border-color:var(--accent)}
@@ -251,27 +254,30 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .fs-ch-name{font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fs-ch-group{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* Toggle sidebar button (visible in fullscreen) */
+/* Toggle sidebar button */
 .fs-sidebar-toggle{
   display:none;position:absolute;top:50%;left:8px;transform:translateY(-50%);
-  z-index:8;width:36px;height:60px;border-radius:0 8px 8px 0;border:none;
+  z-index:12;width:36px;height:60px;border-radius:0 8px 8px 0;border:none;
   background:rgba(0,0,0,.6);color:#fff;cursor:pointer;
-  align-items:center;justify-content:center;opacity:0;transition:opacity .3s;
+  align-items:center;justify-content:center;opacity:0;transition:opacity .3s,left .3s;
 }
-:fullscreen .fs-sidebar-toggle,.fake-fs .fs-sidebar-toggle{display:flex}
-.mini-player:hover .fs-sidebar-toggle{opacity:1}
+.mini-player.fs-active .fs-sidebar-toggle{display:flex}
+.mini-player.fs-active:hover .fs-sidebar-toggle{opacity:1}
 .fs-sidebar-toggle:hover{background:rgba(0,0,0,.85)}
 .fs-sidebar-toggle svg{width:20px;height:20px}
-.fs-sidebar.open~.fs-sidebar-toggle{left:328px}
 
-/* Adjust video when sidebar open in fullscreen */
-:fullscreen .mini-player-video,.fake-fs .mini-player-video{transition:margin-left .3s ease}
-.fs-sidebar.open~video.mini-player-video{margin-left:320px;width:calc(100% - 320px)!important}
+/* When sidebar open: shift toggle + video */
+.mini-player.fs-active.sidebar-open .fs-sidebar-toggle{left:328px}
+.mini-player.fs-active.sidebar-open .mini-player-video{left:320px;width:calc(100% - 320px)!important}
+.mini-player.fs-active.sidebar-open .mini-player-header{left:320px}
+.mini-player.fs-active.sidebar-open .mini-player-controls{left:320px}
 
 @media(max-width:600px){
   .fs-sidebar{width:260px}
-  .fs-sidebar.open~video.mini-player-video{margin-left:260px;width:calc(100% - 260px)!important}
-  .fs-sidebar.open~.fs-sidebar-toggle{left:268px}
+  .mini-player.fs-active.sidebar-open .fs-sidebar-toggle{left:268px}
+  .mini-player.fs-active.sidebar-open .mini-player-video{left:260px;width:calc(100% - 260px)!important}
+  .mini-player.fs-active.sidebar-open .mini-player-header{left:260px}
+  .mini-player.fs-active.sidebar-open .mini-player-controls{left:260px}
 }
 
 .mini-nav-btn{
@@ -974,8 +980,18 @@ function play(id){
 
 // ── Fullscreen (native + fake fallback for TV) ──
 function isFullscreen(){
-  return !!(document.fullscreenElement||document.webkitFullscreenElement)||
-    document.getElementById('miniPlayer').classList.contains('fake-fs');
+  return document.getElementById('miniPlayer').classList.contains('fs-active');
+}
+
+function enterFsMode(mini){
+  mini.classList.add('fs-active');
+  document.body.style.overflow='hidden';
+}
+function leaveFsMode(mini){
+  mini.classList.remove('fs-active','sidebar-open');
+  document.getElementById('fsSidebar').classList.remove('open');
+  document.body.style.overflow='';
+  document.getElementById('player').removeAttribute('controls');
 }
 
 function openFullPlayer(){
@@ -990,23 +1006,18 @@ function openFullPlayer(){
       hlsInstance.subtitleTrack=0;
     }
   }
-  // Try native fullscreen on the container first, then video, then fake-fs
-  if(mini.requestFullscreen)mini.requestFullscreen();
+  // Try native fullscreen on the container, then fake-fs
+  enterFsMode(mini);
+  if(mini.requestFullscreen)mini.requestFullscreen().catch(()=>{});
   else if(mini.webkitRequestFullscreen)mini.webkitRequestFullscreen();
   else if(vid.webkitEnterFullscreen)vid.webkitEnterFullscreen(); // iOS
-  else{mini.classList.add('fake-fs');document.body.style.overflow='hidden'}
 }
 
 function exitFullPlayer(){
   const mini=document.getElementById('miniPlayer');
-  const vid=document.getElementById('player');
-  if(document.fullscreenElement)document.exitFullscreen();
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
   else if(document.webkitFullscreenElement)document.webkitExitFullscreen();
-  if(mini.classList.contains('fake-fs')){
-    mini.classList.remove('fake-fs');
-    document.body.style.overflow='';
-  }
-  vid.removeAttribute('controls');
+  leaveFsMode(mini);
 }
 
 function toggleFullscreen(){
@@ -1014,16 +1025,12 @@ function toggleFullscreen(){
   else openFullPlayer();
 }
 
-// Remove controls when exiting native fullscreen
+// Sync when exiting native fullscreen via Escape or browser UI
 document.addEventListener('fullscreenchange',()=>{
-  if(!document.fullscreenElement){
-    document.getElementById('player').removeAttribute('controls');
-  }
+  if(!document.fullscreenElement)leaveFsMode(document.getElementById('miniPlayer'));
 });
 document.addEventListener('webkitfullscreenchange',()=>{
-  if(!document.webkitFullscreenElement){
-    document.getElementById('player').removeAttribute('controls');
-  }
+  if(!document.webkitFullscreenElement)leaveFsMode(document.getElementById('miniPlayer'));
 });
 
 // Double-click on video toggles fullscreen
@@ -1054,16 +1061,21 @@ function populateFsSidebar(){
 }
 
 function toggleFsSidebar(){
+  const mini=document.getElementById('miniPlayer');
   const sb=document.getElementById('fsSidebar');
   const opening=!sb.classList.contains('open');
   sb.classList.toggle('open');
+  mini.classList.toggle('sidebar-open',opening);
   if(opening)populateFsSidebar();
 }
 
-document.getElementById('fsSidebarToggle').addEventListener('click',toggleFsSidebar);
-document.getElementById('fsSidebarClose').addEventListener('click',()=>{
+function closeFsSidebar(){
   document.getElementById('fsSidebar').classList.remove('open');
-});
+  document.getElementById('miniPlayer').classList.remove('sidebar-open');
+}
+
+document.getElementById('fsSidebarToggle').addEventListener('click',toggleFsSidebar);
+document.getElementById('fsSidebarClose').addEventListener('click',closeFsSidebar);
 
 document.getElementById('fsSidebarSearch').addEventListener('input',(e)=>{
   fsSidebarFilter=e.target.value;
@@ -1074,7 +1086,7 @@ document.getElementById('fsSidebarSearch').addEventListener('input',(e)=>{
 document.addEventListener('keydown',(e)=>{
   if(e.key==='Escape'&&isFullscreen()){
     const sb=document.getElementById('fsSidebar');
-    if(sb.classList.contains('open')){sb.classList.remove('open');e.preventDefault();return}
+    if(sb.classList.contains('open')){closeFsSidebar();e.preventDefault();return}
     exitFullPlayer();e.preventDefault();
   }
   if(e.key==='f'||e.key==='F'){if(currentChannel&&document.activeElement.tagName!=='INPUT'){toggleFullscreen();e.preventDefault()}}
@@ -1089,7 +1101,8 @@ document.getElementById('closePlayerBtn').addEventListener('click',()=>{
   const vid=document.getElementById('player');
   vid.removeAttribute('src');vid.load();
   const mini=document.getElementById('miniPlayer');
-  mini.classList.remove('visible','fake-fs');
+  mini.classList.remove('visible','fs-active','sidebar-open');
+  document.getElementById('fsSidebar').classList.remove('open');
   document.body.style.overflow='';
   currentChannel=null;
   activeCardId=null;

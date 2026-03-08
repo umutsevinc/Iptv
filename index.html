@@ -188,97 +188,56 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   position:fixed!important;inset:0!important;width:100%!important;height:100%!important;
   max-width:100%!important;max-height:100%!important;border-radius:0!important;
   transform:none!important;opacity:1!important;z-index:9999!important;
+  display:flex!important;flex-direction:column;
 }
 .mini-player.fs-active .mini-player-video{
-  position:absolute;top:0;left:0;width:100%;height:100%;
-  aspect-ratio:auto;object-fit:contain;
-  transition:left .3s ease,width .3s ease;
+  flex:1;width:100%;min-height:0;aspect-ratio:auto;object-fit:contain;
 }
+/* In fullscreen: show UI by default, adjust layout for flex column */
+.mini-player.fs-active .mini-player-header{opacity:1;position:relative;z-index:5}
+.mini-player.fs-active .mini-player-controls{opacity:1;position:relative;z-index:5}
+/* Auto-hide UI after 5s via JS class */
 .mini-player.fs-active .mini-player-header,
-.mini-player.fs-active .mini-player-controls{opacity:0;transition:opacity .3s}
-.mini-player.fs-active:hover .mini-player-header,
-.mini-player.fs-active:hover .mini-player-controls{opacity:1}
+.mini-player.fs-active .mini-player-controls,
+.mini-player.fs-active .fs-strip{
+  transition:opacity .4s ease,transform .4s ease;
+}
+.mini-player.fs-active.fs-ui-hidden .mini-player-header{opacity:0!important;pointer-events:none}
+.mini-player.fs-active.fs-ui-hidden .mini-player-controls{opacity:0!important;pointer-events:none}
+.mini-player.fs-active.fs-ui-hidden .fs-strip{opacity:0;pointer-events:none}
 
-/* ═══ FULLSCREEN CHANNEL SIDEBAR ═══ */
-.fs-sidebar{
-  display:none;position:absolute;top:0;left:0;bottom:0;width:320px;
-  background:rgba(10,10,15,.95);z-index:15;flex-direction:column;
-  border-right:1px solid rgba(255,255,255,.1);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  transform:translateX(-100%);transition:transform .3s ease;
+/* ═══ FULLSCREEN CHANNEL STRIP (below video) ═══ */
+.fs-strip{
+  display:none;flex-shrink:0;background:rgba(10,10,15,.95);
+  border-top:1px solid rgba(255,255,255,.1);position:relative;
 }
-.mini-player.fs-active .fs-sidebar{display:flex}
-.fs-sidebar.open{transform:translateX(0)}
-.fs-sidebar-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);
-  flex-shrink:0;
+.mini-player.fs-active .fs-strip{display:block}
+.fs-strip-scroll{
+  display:flex;gap:8px;padding:10px 16px;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent;
+  scroll-behavior:smooth;
 }
-.fs-sidebar-title{font-size:14px;font-weight:600;color:#fff}
-.fs-sidebar-close{
-  width:28px;height:28px;border-radius:50%;border:none;
-  background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
+.fs-strip-scroll::-webkit-scrollbar{height:4px}
+.fs-strip-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+.fs-strip-item{
+  flex-shrink:0;width:120px;cursor:pointer;border-radius:8px;
+  overflow:hidden;background:rgba(255,255,255,.05);
+  border:2px solid transparent;transition:border-color .2s,transform .2s;
 }
-.fs-sidebar-close:hover{background:rgba(255,255,255,.25)}
-.fs-sidebar-search{padding:8px 16px;flex-shrink:0}
-.fs-sidebar-search input{
-  width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.08);color:#fff;font-size:13px;
-  font-family:'Inter',sans-serif;outline:none;box-sizing:border-box;
+.fs-strip-item:hover{border-color:rgba(255,255,255,.3);transform:scale(1.05)}
+.fs-strip-item.active{border-color:var(--accent)}
+.fs-strip-thumb{
+  width:100%;height:65px;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.3);overflow:hidden;
 }
-.fs-sidebar-search input::placeholder{color:rgba(255,255,255,.4)}
-.fs-sidebar-search input:focus{border-color:var(--accent)}
-.fs-sidebar-list{
-  flex:1;overflow-y:auto;overflow-x:hidden;
-  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;
+.fs-strip-thumb img{width:100%;height:100%;object-fit:contain}
+.fs-strip-thumb .fs-initials{font-size:14px;font-weight:600;color:var(--text2)}
+.fs-strip-name{
+  font-size:11px;color:#fff;padding:4px 6px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;text-align:center;
 }
-.fs-sidebar-list::-webkit-scrollbar{width:5px}
-.fs-sidebar-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:3px}
-.fs-ch{
-  display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;
-  transition:background .15s;border-left:3px solid transparent;
-}
-.fs-ch:hover{background:rgba(255,255,255,.08)}
-.fs-ch.active{background:rgba(229,9,20,.15);border-left-color:var(--accent)}
-.fs-ch-logo{
-  width:36px;height:36px;border-radius:6px;object-fit:contain;
-  background:rgba(255,255,255,.05);flex-shrink:0;
-}
-.fs-ch-logo-placeholder{
-  width:36px;height:36px;border-radius:6px;flex-shrink:0;
-  background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:600;color:var(--text2);
-}
-.fs-ch-info{flex:1;min-width:0}
-.fs-ch-name{font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fs-ch-group{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* Toggle sidebar button */
-.fs-sidebar-toggle{
-  display:none;position:absolute;top:50%;left:8px;transform:translateY(-50%);
-  z-index:12;width:36px;height:60px;border-radius:0 8px 8px 0;border:none;
-  background:rgba(0,0,0,.6);color:#fff;cursor:pointer;
-  align-items:center;justify-content:center;opacity:0;transition:opacity .3s,left .3s;
-}
-.mini-player.fs-active .fs-sidebar-toggle{display:flex}
-.mini-player.fs-active:hover .fs-sidebar-toggle{opacity:1}
-.fs-sidebar-toggle:hover{background:rgba(0,0,0,.85)}
-.fs-sidebar-toggle svg{width:20px;height:20px}
-
-/* When sidebar open: shift toggle + video */
-.mini-player.fs-active.sidebar-open .fs-sidebar-toggle{left:328px}
-.mini-player.fs-active.sidebar-open .mini-player-video{left:320px;width:calc(100% - 320px)!important}
-.mini-player.fs-active.sidebar-open .mini-player-header{left:320px}
-.mini-player.fs-active.sidebar-open .mini-player-controls{left:320px}
-
-@media(max-width:600px){
-  .fs-sidebar{width:260px}
-  .mini-player.fs-active.sidebar-open .fs-sidebar-toggle{left:268px}
-  .mini-player.fs-active.sidebar-open .mini-player-video{left:260px;width:calc(100% - 260px)!important}
-  .mini-player.fs-active.sidebar-open .mini-player-header{left:260px}
-  .mini-player.fs-active.sidebar-open .mini-player-controls{left:260px}
-}
+.fs-strip-sentinel{flex-shrink:0;width:1px;height:1px}
 
 .mini-nav-btn{
   padding:6px 12px;border-radius:6px;border:none;
@@ -392,21 +351,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </button>
     </div>
   </div>
-  <div class="fs-sidebar" id="fsSidebar">
-    <div class="fs-sidebar-header">
-      <span class="fs-sidebar-title">Chaînes</span>
-      <button class="fs-sidebar-close" id="fsSidebarClose" title="Fermer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="fs-sidebar-search">
-      <input type="text" id="fsSidebarSearch" placeholder="Rechercher une chaîne…">
-    </div>
-    <div class="fs-sidebar-list" id="fsSidebarList"></div>
-  </div>
-  <button class="fs-sidebar-toggle" id="fsSidebarToggle" title="Liste des chaînes">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-  </button>
   <video class="mini-player-video" id="player" playsinline webkit-playsinline></video>
   <div class="player-overlay" id="overlay">
     <div class="icon">📡</div>
@@ -422,6 +366,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       Suiv.
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </button>
+  </div>
+  <div class="fs-strip" id="fsStrip">
+    <div class="fs-strip-scroll" id="fsStripScroll"></div>
   </div>
 </div>
 
@@ -943,8 +890,8 @@ function play(id){
 
   updateActiveCard(id);
 
-  // Refresh fullscreen sidebar if open
-  if(document.getElementById('fsSidebar').classList.contains('open'))populateFsSidebar();
+  // Refresh fullscreen strip if active
+  if(isFullscreen())populateStrip();
 
   const vid=document.getElementById('player');
   const overlay=document.getElementById('overlay');
@@ -986,10 +933,12 @@ function isFullscreen(){
 function enterFsMode(mini){
   mini.classList.add('fs-active');
   document.body.style.overflow='hidden';
+  populateStrip();
+  fsResetHide();
 }
 function leaveFsMode(mini){
-  mini.classList.remove('fs-active','sidebar-open');
-  document.getElementById('fsSidebar').classList.remove('open');
+  mini.classList.remove('fs-active','fs-ui-hidden');
+  clearTimeout(fsHideTimer);
   document.body.style.overflow='';
   document.getElementById('player').removeAttribute('controls');
 }
@@ -1036,61 +985,93 @@ document.addEventListener('webkitfullscreenchange',()=>{
 // Double-click on video toggles fullscreen
 document.getElementById('player').addEventListener('dblclick',toggleFullscreen);
 
-// ── Fullscreen channel sidebar ──
-let fsSidebarFilter='';
-function populateFsSidebar(){
-  const list=document.getElementById('fsSidebarList');
-  list.innerHTML='';
-  const visible=getVisible();
-  const q=fsSidebarFilter.toLowerCase();
-  const filtered=q?visible.filter(c=>c.name.toLowerCase().includes(q)||c.group.toLowerCase().includes(q)):visible;
-  filtered.forEach(ch=>{
-    const row=document.createElement('div');
-    row.className='fs-ch'+(currentChannel&&currentChannel.id===ch.id?' active':'');
-    const logoHtml=ch.logo
-      ?'<img class="fs-ch-logo" src="'+ch.logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
-        +'<div class="fs-ch-logo-placeholder" style="display:none">'+getInitials(ch.name)+'</div>'
-      :'<div class="fs-ch-logo-placeholder">'+getInitials(ch.name)+'</div>';
-    row.innerHTML=logoHtml+'<div class="fs-ch-info"><div class="fs-ch-name">'+ch.name+'</div><div class="fs-ch-group">'+ch.group+'</div></div>';
-    row.onclick=()=>{play(ch.id);populateFsSidebar()};
-    list.appendChild(row);
-  });
-  // Scroll active into view
-  const active=list.querySelector('.fs-ch.active');
-  if(active)active.scrollIntoView({block:'center',behavior:'smooth'});
-}
-
-function toggleFsSidebar(){
+// ── Fullscreen auto-hide UI (5s inactivity) ──
+let fsHideTimer=null;
+function fsResetHide(){
   const mini=document.getElementById('miniPlayer');
-  const sb=document.getElementById('fsSidebar');
-  const opening=!sb.classList.contains('open');
-  sb.classList.toggle('open');
-  mini.classList.toggle('sidebar-open',opening);
-  if(opening)populateFsSidebar();
-}
-
-function closeFsSidebar(){
-  document.getElementById('fsSidebar').classList.remove('open');
-  document.getElementById('miniPlayer').classList.remove('sidebar-open');
-}
-
-document.getElementById('fsSidebarToggle').addEventListener('click',toggleFsSidebar);
-document.getElementById('fsSidebarClose').addEventListener('click',closeFsSidebar);
-
-document.getElementById('fsSidebarSearch').addEventListener('input',(e)=>{
-  fsSidebarFilter=e.target.value;
-  populateFsSidebar();
-});
-
-// Keyboard: Escape exits fullscreen, F toggles fullscreen, C toggles sidebar
-document.addEventListener('keydown',(e)=>{
-  if(e.key==='Escape'&&isFullscreen()){
-    const sb=document.getElementById('fsSidebar');
-    if(sb.classList.contains('open')){closeFsSidebar();e.preventDefault();return}
-    exitFullPlayer();e.preventDefault();
+  mini.classList.remove('fs-ui-hidden');
+  clearTimeout(fsHideTimer);
+  if(isFullscreen()){
+    fsHideTimer=setTimeout(()=>{mini.classList.add('fs-ui-hidden')},5000);
   }
-  if(e.key==='f'||e.key==='F'){if(currentChannel&&document.activeElement.tagName!=='INPUT'){toggleFullscreen();e.preventDefault()}}
-  if(e.key==='c'||e.key==='C'){if(isFullscreen()&&document.activeElement.tagName!=='INPUT'){toggleFsSidebar();e.preventDefault()}}
+}
+document.getElementById('miniPlayer').addEventListener('mousemove',()=>{if(isFullscreen())fsResetHide()});
+document.getElementById('miniPlayer').addEventListener('touchstart',()=>{if(isFullscreen())fsResetHide()});
+document.getElementById('miniPlayer').addEventListener('click',()=>{if(isFullscreen())fsResetHide()});
+
+// ── Fullscreen channel strip ──
+const FS_STRIP_PAGE=20;
+let fsStripLoaded=0;
+let fsStripChannels=[];
+let fsStripObserver=null;
+
+function buildStripItem(ch){
+  const item=document.createElement('div');
+  item.className='fs-strip-item'+(currentChannel&&currentChannel.id===ch.id?' active':'');
+  const thumbContent=ch.logo
+    ?'<img src="'+ch.logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="fs-initials" style="display:none">'+getInitials(ch.name)+'</span>'
+    :'<span class="fs-initials">'+getInitials(ch.name)+'</span>';
+  item.innerHTML='<div class="fs-strip-thumb">'+thumbContent+'</div><div class="fs-strip-name">'+ch.name+'</div>';
+  item.onclick=()=>{play(ch.id)};
+  return item;
+}
+
+function loadStripPage(){
+  const scroll=document.getElementById('fsStripScroll');
+  const end=Math.min(fsStripLoaded+FS_STRIP_PAGE,fsStripChannels.length);
+  for(let i=fsStripLoaded;i<end;i++){
+    scroll.appendChild(buildStripItem(fsStripChannels[i]));
+  }
+  fsStripLoaded=end;
+  // Add sentinel for infinite scroll
+  if(fsStripLoaded<fsStripChannels.length){
+    const sentinel=document.createElement('div');
+    sentinel.className='fs-strip-sentinel';
+    scroll.appendChild(sentinel);
+    if(fsStripObserver)fsStripObserver.disconnect();
+    fsStripObserver=new IntersectionObserver((entries)=>{
+      if(entries[0].isIntersecting){
+        sentinel.remove();
+        loadStripPage();
+      }
+    },{root:scroll,rootMargin:'0px 200px 0px 0px'});
+    fsStripObserver.observe(sentinel);
+  }
+}
+
+function populateStrip(){
+  const scroll=document.getElementById('fsStripScroll');
+  scroll.innerHTML='';
+  if(fsStripObserver){fsStripObserver.disconnect();fsStripObserver=null}
+  const visible=getVisible();
+  // Reorder: current channel neighbors first
+  if(currentChannel){
+    const idx=visible.findIndex(c=>c.id===currentChannel.id);
+    if(idx>-1){
+      // Put prev channels then current then next
+      const before=visible.slice(Math.max(0,idx-3),idx);
+      const after=visible.slice(idx,visible.length);
+      const rest=visible.slice(0,Math.max(0,idx-3));
+      fsStripChannels=[...before,...after,...rest];
+    }else{
+      fsStripChannels=visible;
+    }
+  }else{
+    fsStripChannels=visible;
+  }
+  fsStripLoaded=0;
+  loadStripPage();
+  // Scroll active into view
+  requestAnimationFrame(()=>{
+    const active=scroll.querySelector('.fs-strip-item.active');
+    if(active)active.scrollIntoView({inline:'center',behavior:'smooth'});
+  });
+}
+
+// Keyboard: Escape exits fullscreen, F toggles fullscreen
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Escape'&&isFullscreen()){exitFullPlayer();e.preventDefault()}
+  if((e.key==='f'||e.key==='F')&&currentChannel&&document.activeElement.tagName!=='INPUT'){toggleFullscreen();e.preventDefault()}
 });
 
 // ── Event listeners ──
@@ -1101,8 +1082,8 @@ document.getElementById('closePlayerBtn').addEventListener('click',()=>{
   const vid=document.getElementById('player');
   vid.removeAttribute('src');vid.load();
   const mini=document.getElementById('miniPlayer');
-  mini.classList.remove('visible','fs-active','sidebar-open');
-  document.getElementById('fsSidebar').classList.remove('open');
+  mini.classList.remove('visible','fs-active','fs-ui-hidden');
+  clearTimeout(fsHideTimer);
   document.body.style.overflow='';
   currentChannel=null;
   activeCardId=null;

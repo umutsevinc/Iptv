@@ -129,13 +129,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .card-group{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ═══ STATUS DOT ═══ */
+.status-dot{
+  position:absolute;top:8px;left:8px;width:10px;height:10px;
+  border-radius:50%;z-index:5;border:1.5px solid rgba(0,0,0,.4);
+  transition:background .3s;
+}
+.status-dot.unknown{background:#555}
+.status-dot.online{background:#2ecc40;box-shadow:0 0 6px rgba(46,204,64,.6)}
+.status-dot.offline{background:#e50914;box-shadow:0 0 6px rgba(229,9,20,.6)}
+
 /* Active card */
 .card.playing{border:2px solid var(--accent)}
-.card.playing::before{
-  content:'';position:absolute;top:8px;right:8px;width:10px;height:10px;
-  background:var(--accent);border-radius:50%;z-index:5;
-  animation:pulse-dot 1.5s infinite;
-}
+.card.playing .status-dot{animation:pulse-dot 1.5s infinite}
 @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
 
 /* Dead */
@@ -150,6 +156,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   transition:all .4s cubic-bezier(.4,0,.2,1);
 }
 .mini-player.visible{transform:translateY(0) scale(1);opacity:1}
+.mini-player.hidden-for-full{transform:translateY(120%) scale(.9);opacity:0}
 .mini-player-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:8px 12px;background:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.6));
@@ -259,6 +266,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .err-btn:hover{border-color:var(--accent)}
 .err-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .err-btn.primary:hover{background:var(--accent-hover)}
+
+/* ═══ SCROLL LOADER ═══ */
+.scroll-loader{display:flex;justify-content:center;padding:24px;grid-column:1/-1}
+.scroll-loader .spinner{width:32px;height:32px}
 
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:768px){
@@ -403,7 +414,7 @@ const PLAYLIST_URLS=[
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
-const CHANNEL_MAP=new Map(); // fast lookup by id
+const CHANNEL_MAP=new Map();
 let categories=new Map();
 let currentCat='Toutes';
 let currentChannel=null;
@@ -411,28 +422,93 @@ let hlsInstance=null;
 let searchQuery='';
 const deadChannels=new Set();
 let isFullPlayer=false;
-let activeCardId=null; // track active card without full re-render
+let activeCardId=null;
 
-// ── Dead logo domains (DNS/TLS fails → console errors) ──
+// ── Pagination state ──
+const PAGE_SIZE=40;
+let gridPage=0;
+let gridLoading=false;
+let gridObserver=null;
+
+// ── Channel health status: 'unknown' | 'online' | 'offline' ──
+const channelStatus=new Map();
+let healthCheckQueue=[];
+let healthChecking=false;
+const CONCURRENT_CHECKS=4;
+
+// ── Dead logo domains ──
 const DEAD_LOGO_HOSTS=new Set([
   'm.yilmaztv.cc','euro-medya.ath.cx','foto.fotodepo.fr',
   'mdstream.net','obsfullhd.tv','s3.i3ns.net','xplatinmedia.com'
 ]);
 function isLogoValid(url){
   if(!url)return false;
-  // Block http:// logos (mixed content on HTTPS pages)
   if(url.startsWith('http://'))return false;
-  try{
-    const host=new URL(url).hostname;
-    return !DEAD_LOGO_HOSTS.has(host);
-  }catch(e){return false}
+  try{return !DEAD_LOGO_HOSTS.has(new URL(url).hostname)}catch(e){return false}
 }
 function markLogoDead(url){
   try{DEAD_LOGO_HOSTS.add(new URL(url).hostname)}catch(e){}
 }
 
-// ── Play icon SVG ──
 const PLAY_SVG='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+// ── Health checker ──
+function getStatusClass(id){
+  return channelStatus.get(id)||'unknown';
+}
+
+function checkChannelHealth(ch){
+  return new Promise(resolve=>{
+    if(channelStatus.has(ch.id)){resolve();return}
+    const url=ch.url;
+    // Obvious dead formats
+    if(/youtube\.com|youtu\.be|dailymotion\.com/i.test(url)||/\.mpd(\?|$)/i.test(url)){
+      channelStatus.set(ch.id,'offline');
+      updateDotInDOM(ch.id,'offline');
+      resolve();return;
+    }
+    const safeUrl=url.startsWith('http://')?CORS_PROXIES[0]+encodeURIComponent(url):url;
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),6000);
+    fetch(safeUrl,{method:'HEAD',mode:'no-cors',signal:controller.signal})
+      .then(()=>{
+        clearTimeout(timer);
+        channelStatus.set(ch.id,'online');
+        updateDotInDOM(ch.id,'online');
+      })
+      .catch(()=>{
+        clearTimeout(timer);
+        channelStatus.set(ch.id,'offline');
+        updateDotInDOM(ch.id,'offline');
+      })
+      .finally(resolve);
+  });
+}
+
+function updateDotInDOM(chId,status){
+  document.querySelectorAll('.card').forEach(c=>{
+    if(c._chId===chId){
+      const dot=c.querySelector('.status-dot');
+      if(dot){dot.className='status-dot '+status}
+    }
+  });
+}
+
+async function runHealthChecks(){
+  if(healthChecking)return;
+  healthChecking=true;
+  while(healthCheckQueue.length>0){
+    const batch=healthCheckQueue.splice(0,CONCURRENT_CHECKS);
+    await Promise.all(batch.map(ch=>checkChannelHealth(ch)));
+  }
+  healthChecking=false;
+}
+
+function queueHealthCheck(channels){
+  const toCheck=channels.filter(ch=>!channelStatus.has(ch.id));
+  healthCheckQueue.push(...toCheck);
+  runHealthChecks();
+}
 
 // ── M3U8 Parser ──
 function parseM3U(text,startId){
@@ -543,10 +619,13 @@ function createCard(ch){
   const card=document.createElement('div');
   card.className='card'+(deadChannels.has(ch.id)?' dead':'')+(currentChannel&&currentChannel.id===ch.id?' playing':'');
   const hasLogo=isLogoValid(ch.logo);
-  const thumbContent=hasLogo
-    ?'<img src="'+ch.logo+'" alt="" loading="lazy" onerror="markLogoDead(this.src);this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
-      +'<span class="initials" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center">'+getInitials(ch.name)+'</span>'
-    :'<span class="initials">'+getInitials(ch.name)+'</span>';
+  const status=getStatusClass(ch.id);
+  const thumbContent=
+    '<div class="status-dot '+status+'"></div>'+
+    (hasLogo
+      ?'<img src="'+ch.logo+'" alt="" loading="lazy" onerror="markLogoDead(this.src);this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+        +'<span class="initials" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center">'+getInitials(ch.name)+'</span>'
+      :'<span class="initials">'+getInitials(ch.name)+'</span>');
   card.innerHTML=
     '<div class="card-thumb">'+thumbContent+'<div class="card-play">'+PLAY_SVG+'</div></div>'+
     '<div class="card-body"><div class="card-name">'+ch.name+'</div><div class="card-group">'+ch.group+'</div></div>';
@@ -575,13 +654,59 @@ function renderCats(){
   });
 }
 
+// ── Infinite scroll sentinel ──
+function createSentinel(container){
+  if(gridObserver)gridObserver.disconnect();
+  const sentinel=document.createElement('div');
+  sentinel.className='scroll-loader';
+  sentinel.id='scrollSentinel';
+  sentinel.innerHTML='<div class="spinner"></div>';
+  container.appendChild(sentinel);
+
+  gridObserver=new IntersectionObserver(entries=>{
+    if(entries[0].isIntersecting&&!gridLoading){
+      loadMoreCards();
+    }
+  },{rootMargin:'400px'});
+  gridObserver.observe(sentinel);
+}
+
+function loadMoreCards(){
+  const grid=document.getElementById('paginatedGrid');
+  const sentinel=document.getElementById('scrollSentinel');
+  if(!grid||!sentinel)return;
+  const visible=getVisible();
+  const start=gridPage*PAGE_SIZE;
+  if(start>=visible.length){
+    sentinel.remove();
+    if(gridObserver)gridObserver.disconnect();
+    return;
+  }
+  gridLoading=true;
+  const end=Math.min(start+PAGE_SIZE,visible.length);
+  const batch=visible.slice(start,end);
+  for(const ch of batch){
+    grid.insertBefore(createCard(ch),sentinel);
+  }
+  gridPage++;
+  gridLoading=false;
+  // Queue health checks for this batch
+  queueHealthCheck(batch);
+  // Remove sentinel if no more
+  if(end>=visible.length){
+    sentinel.remove();
+    if(gridObserver)gridObserver.disconnect();
+  }
+}
+
 // ── Render Netflix rows or search grid ──
 function renderContent(){
   const main=document.getElementById('mainContent');
   main.innerHTML='';
+  gridPage=0;
+  if(gridObserver)gridObserver.disconnect();
 
   if(searchQuery){
-    // Search results as a grid
     const visible=getVisible();
     const title=document.createElement('div');
     title.className='search-title';
@@ -589,14 +714,14 @@ function renderContent(){
     main.appendChild(title);
     const grid=document.createElement('div');
     grid.className='search-grid';
-    const limit=Math.min(visible.length,200);
-    for(let i=0;i<limit;i++) grid.appendChild(createCard(visible[i]));
+    grid.id='paginatedGrid';
     main.appendChild(grid);
+    createSentinel(grid);
+    loadMoreCards();
     return;
   }
 
   if(currentCat!=='Toutes'){
-    // Single category as grid
     const chs=categories.get(currentCat)||[];
     const title=document.createElement('div');
     title.className='search-title';
@@ -604,19 +729,36 @@ function renderContent(){
     main.appendChild(title);
     const grid=document.createElement('div');
     grid.className='search-grid';
-    const limit=Math.min(chs.length,200);
-    for(let i=0;i<limit;i++) grid.appendChild(createCard(chs[i]));
+    grid.id='paginatedGrid';
     main.appendChild(grid);
+    createSentinel(grid);
+    loadMoreCards();
     return;
   }
 
-  // "Toutes" → Netflix-style rows per category
+  // "Toutes" → Netflix-style rows per category (lazy loaded)
   let first=true;
-  categories.forEach((chs,cat)=>{
-    if(cat==='Toutes')return;
-    if(chs.length===0)return;
+  const catEntries=[...categories.entries()].filter(([cat])=>cat!=='Toutes');
+  const rowObserver=new IntersectionObserver((entries,obs)=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting)return;
+      const section=entry.target;
+      const catName=section.dataset.cat;
+      const chs=categories.get(catName)||[];
+      if(section.dataset.loaded)return;
+      section.dataset.loaded='1';
+      const scroll=section.querySelector('.row-scroll');
+      const limit=Math.min(chs.length,40);
+      const batch=chs.slice(0,limit);
+      for(const ch of batch) scroll.appendChild(createCard(ch));
+      queueHealthCheck(batch);
+      obs.unobserve(section);
+    });
+  },{rootMargin:'600px'});
 
-    // Hero for first category
+  for(const[cat,chs] of catEntries){
+    if(chs.length===0)continue;
+
     if(first){
       first=false;
       const hero=document.createElement('div');
@@ -632,6 +774,7 @@ function renderContent(){
 
     const section=document.createElement('div');
     section.className='row-section';
+    section.dataset.cat=cat;
 
     const title=document.createElement('div');
     title.className='row-title';
@@ -640,8 +783,6 @@ function renderContent(){
 
     const scroll=document.createElement('div');
     scroll.className='row-scroll';
-    const limit=Math.min(chs.length,40);
-    for(let i=0;i<limit;i++) scroll.appendChild(createCard(chs[i]));
     section.appendChild(scroll);
 
     // Arrow buttons
@@ -658,13 +799,13 @@ function renderContent(){
     section.appendChild(rightArr);
 
     main.appendChild(section);
-  });
+    rowObserver.observe(section);
+  }
 }
 
 // ── Player logic ──
 function proxyUrl(url,idx){return CORS_PROXIES[idx]+encodeURIComponent(url)}
 
-// Safari detection (cached once)
 const IS_SAFARI=/^((?!chrome|android).)*safari/i.test(navigator.userAgent)||
   (navigator.userAgent.includes('AppleWebKit')&&!navigator.userAgent.includes('Chrome'));
 
@@ -673,11 +814,11 @@ function startHls(ch,url,vid,attempt){
   hlsInstance=new Hls({
     enableWorker:true,
     lowLatencyMode:true,
-    maxBufferLength:10,       // start playing faster
+    maxBufferLength:10,
     maxMaxBufferLength:30,
     maxBufferSize:30*1000*1000,
-    startFragPrefetch:true,   // prefetch next fragment
-    testBandwidth:false,      // skip bandwidth test → faster start
+    startFragPrefetch:true,
+    testBandwidth:false,
     xhrSetup:function(xhr){xhr.withCredentials=false}
   });
   hlsInstance.loadSource(url);
@@ -685,12 +826,17 @@ function startHls(ch,url,vid,attempt){
   hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>{
     document.getElementById('overlay').classList.add('hidden');
     vid.play().catch(()=>{});
+    // Mark as online
+    channelStatus.set(ch.id,'online');
+    updateDotInDOM(ch.id,'online');
   });
   hlsInstance.on(Hls.Events.ERROR,(e,data)=>{
     if(!data.fatal)return;
     if(attempt<CORS_PROXIES.length){
       startHls(ch,proxyUrl(ch.url,attempt),vid,attempt+1);
     }else{
+      channelStatus.set(ch.id,'offline');
+      updateDotInDOM(ch.id,'offline');
       showErr(ch);
     }
   });
@@ -698,6 +844,8 @@ function startHls(ch,url,vid,attempt){
 
 function showErr(ch){
   deadChannels.add(ch.id);
+  channelStatus.set(ch.id,'offline');
+  updateDotInDOM(ch.id,'offline');
   const overlay=document.getElementById('overlay');
   overlay.classList.remove('hidden');
   const url=ch.url;
@@ -728,12 +876,10 @@ function getNeighbors(){
 }
 
 function updateActiveCard(newId){
-  // Remove old active
   if(activeCardId!==null){
     const old=document.querySelector('.card.playing');
-    if(old){old.classList.remove('playing');old.querySelector('.pulse-dot')?.remove()}
+    if(old)old.classList.remove('playing');
   }
-  // Set new active
   activeCardId=newId;
   const cards=document.querySelectorAll('.card');
   for(const c of cards){
@@ -745,39 +891,35 @@ function play(id){
   const ch=CHANNEL_MAP.get(id);
   if(!ch)return;
 
-  // Kill previous stream immediately
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
-
   currentChannel=ch;
 
-  // Update mini player UI (lightweight, no DOM rebuild)
-  document.getElementById('miniPlayer').classList.add('visible');
+  // Show mini player
+  const mini=document.getElementById('miniPlayer');
+  mini.classList.add('visible');
+  mini.classList.remove('hidden-for-full');
   document.getElementById('miniName').textContent=ch.name;
   document.getElementById('miniGroup').textContent=ch.group;
   document.getElementById('fullName').textContent=ch.name;
   document.getElementById('fullGroup').textContent=ch.group;
 
-  // Update nav buttons
   const{prev,next}=getNeighbors();
   document.getElementById('miniPrevBtn').onclick=prev?()=>play(prev.id):null;
   document.getElementById('miniNextBtn').onclick=next?()=>play(next.id):null;
 
-  // Update active card highlight without re-rendering
   updateActiveCard(id);
 
   const vid=document.getElementById('player');
   const overlay=document.getElementById('overlay');
 
   const url=ch.url;
-  const isYT=url.includes('dailymotion')||url.includes('youtube');
-  const isMPD=url.includes('.mpd');
-
-  if(isYT||isMPD){showErr(ch);return}
+  if(/youtube\.com|youtu\.be|dailymotion\.com/i.test(url)||/\.mpd(\?|$)/i.test(url)){
+    showErr(ch);return;
+  }
 
   overlay.classList.remove('hidden');
   overlay.innerHTML='<div class="icon">⏳</div><div class="msg">Chargement…</div>';
 
-  // Start new stream directly (no vid.removeAttribute + vid.load delay)
   const safeUrl=url.startsWith('http://')?proxyUrl(url,0):url;
   const startAttempt=url.startsWith('http://')?1:0;
 
@@ -806,9 +948,11 @@ function openFullPlayer(){
   const fullVid=document.getElementById('fullPlayer');
   const miniVid=document.getElementById('player');
 
+  // Hide mini player
+  document.getElementById('miniPlayer').classList.add('hidden-for-full');
+
   fullOverlay.classList.add('visible');
 
-  // Transfer stream to full player
   if(hlsInstance){
     hlsInstance.detachMedia();
     hlsInstance.attachMedia(fullVid);
@@ -818,6 +962,8 @@ function openFullPlayer(){
     fullVid.currentTime=miniVid.currentTime;
     fullVid.play().catch(()=>{});
   }
+  // Pause mini
+  miniVid.pause();
 }
 
 function closeFullPlayer(){
@@ -827,8 +973,9 @@ function closeFullPlayer(){
   const miniVid=document.getElementById('player');
 
   fullOverlay.classList.remove('visible');
+  // Show mini player again
+  document.getElementById('miniPlayer').classList.remove('hidden-for-full');
 
-  // Transfer back to mini
   if(hlsInstance){
     hlsInstance.detachMedia();
     hlsInstance.attachMedia(miniVid);
@@ -838,6 +985,7 @@ function closeFullPlayer(){
     miniVid.currentTime=fullVid.currentTime;
     miniVid.play().catch(()=>{});
   }
+  fullVid.pause();
   fullVid.removeAttribute('src');
   fullVid.load();
 }
@@ -854,18 +1002,23 @@ document.getElementById('closePlayerBtn').addEventListener('click',()=>{
   vid.removeAttribute('src');vid.load();
   document.getElementById('miniPlayer').classList.remove('visible');
   currentChannel=null;
-  renderContent();
+  activeCardId=null;
+  document.querySelectorAll('.card.playing').forEach(c=>c.classList.remove('playing'));
 });
 
-// Search
+// Search with debounce
+let searchTimer=null;
 document.getElementById('search').addEventListener('input',e=>{
-  searchQuery=e.target.value.trim();
-  currentCat='Toutes';
-  renderCats();
-  renderContent();
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{
+    searchQuery=e.target.value.trim();
+    currentCat='Toutes';
+    renderCats();
+    renderContent();
+  },200);
 });
 
-// Mobile menu → scroll cat nav
+// Mobile menu
 document.getElementById('menuBtn').addEventListener('click',()=>{
   document.getElementById('catNav').scrollTo({left:0,behavior:'smooth'});
 });

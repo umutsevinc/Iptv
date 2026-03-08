@@ -411,10 +411,15 @@ let searchQuery='';
 const deadChannels=new Set();
 let isFullPlayer=false;
 
-// ── Dead logo domains (DNS fails → console errors) ──
-const DEAD_LOGO_HOSTS=new Set();
+// ── Dead logo domains (DNS/TLS fails → console errors) ──
+const DEAD_LOGO_HOSTS=new Set([
+  'm.yilmaztv.cc','euro-medya.ath.cx','foto.fotodepo.fr',
+  'mdstream.net','obsfullhd.tv','s3.i3ns.net','xplatinmedia.com'
+]);
 function isLogoValid(url){
   if(!url)return false;
+  // Block http:// logos (mixed content on HTTPS pages)
+  if(url.startsWith('http://'))return false;
   try{
     const host=new URL(url).hostname;
     return !DEAD_LOGO_HOSTS.has(host);

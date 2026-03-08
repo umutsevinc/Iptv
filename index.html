@@ -183,6 +183,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   opacity:0;transition:opacity .2s;
 }
 .mini-player:hover .mini-player-controls{opacity:1}
+/* ═══ FAKE FULLSCREEN (TV / fallback) ═══ */
+.mini-player.fake-fs{
+  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;
+  max-width:100%!important;max-height:100%!important;border-radius:0!important;
+  transform:none!important;opacity:1!important;z-index:9999!important;
+}
+.mini-player.fake-fs .mini-player-video{width:100%;height:100%;aspect-ratio:auto;object-fit:contain}
+.mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{opacity:1}
+.mini-player.fake-fs:not(:hover) .mini-player-header,.mini-player.fake-fs:not(:hover) .mini-player-controls{opacity:0}
+.mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{transition:opacity .3s}
 .mini-nav-btn{
   padding:6px 12px;border-radius:6px;border:none;
   background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
@@ -863,27 +873,49 @@ function play(id){
   }
 }
 
-// ── Fullscreen (native browser) ──
+// ── Fullscreen (native + fake fallback for TV) ──
+function isFullscreen(){
+  return !!(document.fullscreenElement||document.webkitFullscreenElement)||
+    document.getElementById('miniPlayer').classList.contains('fake-fs');
+}
+
 function openFullPlayer(){
+  const mini=document.getElementById('miniPlayer');
   const vid=document.getElementById('player');
   vid.setAttribute('controls','');
-  // Enable subtitle/caption tracks if available
-  for(let i=0;i<vid.textTracks.length;i++){
-    vid.textTracks[i].mode='showing';
-  }
-  // Also enable HLS subtitle tracks
+  // Enable subtitle/caption tracks
+  for(let i=0;i<vid.textTracks.length;i++){vid.textTracks[i].mode='showing'}
   if(hlsInstance){
     hlsInstance.subtitleDisplay=true;
     if(hlsInstance.subtitleTracks.length>0&&hlsInstance.subtitleTrack===-1){
       hlsInstance.subtitleTrack=0;
     }
   }
-  if(vid.requestFullscreen)vid.requestFullscreen();
-  else if(vid.webkitRequestFullscreen)vid.webkitRequestFullscreen();
+  // Try native fullscreen on the container first, then video, then fake-fs
+  if(mini.requestFullscreen)mini.requestFullscreen();
+  else if(mini.webkitRequestFullscreen)mini.webkitRequestFullscreen();
   else if(vid.webkitEnterFullscreen)vid.webkitEnterFullscreen(); // iOS
+  else{mini.classList.add('fake-fs');document.body.style.overflow='hidden'}
 }
 
-// Remove controls when exiting fullscreen
+function exitFullPlayer(){
+  const mini=document.getElementById('miniPlayer');
+  const vid=document.getElementById('player');
+  if(document.fullscreenElement)document.exitFullscreen();
+  else if(document.webkitFullscreenElement)document.webkitExitFullscreen();
+  if(mini.classList.contains('fake-fs')){
+    mini.classList.remove('fake-fs');
+    document.body.style.overflow='';
+  }
+  vid.removeAttribute('controls');
+}
+
+function toggleFullscreen(){
+  if(isFullscreen())exitFullPlayer();
+  else openFullPlayer();
+}
+
+// Remove controls when exiting native fullscreen
 document.addEventListener('fullscreenchange',()=>{
   if(!document.fullscreenElement){
     document.getElementById('player').removeAttribute('controls');
@@ -895,13 +927,25 @@ document.addEventListener('webkitfullscreenchange',()=>{
   }
 });
 
+// Double-click on video toggles fullscreen
+document.getElementById('player').addEventListener('dblclick',toggleFullscreen);
+
+// Keyboard: Escape exits fullscreen, F toggles fullscreen
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Escape'&&isFullscreen()){exitFullPlayer();e.preventDefault()}
+  if(e.key==='f'||e.key==='F'){if(currentChannel){toggleFullscreen();e.preventDefault()}}
+});
+
 // ── Event listeners ──
-document.getElementById('expandBtn').addEventListener('click',openFullPlayer);
+document.getElementById('expandBtn').addEventListener('click',toggleFullscreen);
 document.getElementById('closePlayerBtn').addEventListener('click',()=>{
+  if(isFullscreen())exitFullPlayer();
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
   const vid=document.getElementById('player');
   vid.removeAttribute('src');vid.load();
-  document.getElementById('miniPlayer').classList.remove('visible');
+  const mini=document.getElementById('miniPlayer');
+  mini.classList.remove('visible','fake-fs');
+  document.body.style.overflow='';
   currentChannel=null;
   activeCardId=null;
   document.querySelectorAll('.card.playing').forEach(c=>c.classList.remove('playing'));

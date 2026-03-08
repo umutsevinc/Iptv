@@ -80,6 +80,17 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .nav-current-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nav-current-group{font-size:11px;color:var(--text2)}
 
+/* Dead channel indicators */
+.ch-item.dead{opacity:.4}
+.ch-item.dead .ch-name::after{content:' HS';font-size:10px;color:var(--accent);font-weight:700;margin-left:4px}
+.card.dead{opacity:.4;order:9999}
+.card.dead .card-name::after{content:' HS';font-size:10px;color:var(--accent);font-weight:700;margin-left:4px}
+.err-actions{display:flex;gap:8px;margin-top:8px}
+.err-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
+.err-btn:hover{border-color:var(--accent)}
+.err-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.err-btn.primary:hover{background:var(--accent-hover)}
+
 /* Grid */
 .grid-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--text2)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
@@ -147,6 +158,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <script>
 const PLAYLIST_URLS=[
+  // ── France (441 chaînes TNT, régionales, sport, cinéma…) ──
+  'https://raw.githubusercontent.com/schumijo/iptv/main/fr.m3u8',
   // ── Turquie (chaînes avec streams vérifiés) ──
   'https://raw.githubusercontent.com/hayatiptv/iptv/master/index.m3u',
   'https://raw.githubusercontent.com/hayatiptv/iptv/master/SPORTV.m3u',
@@ -158,13 +171,16 @@ const PLAYLIST_URLS=[
   'https://iptv-org.github.io/iptv/categories/documentary.m3u',
   'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
   'https://iptv-org.github.io/iptv/categories/kids.m3u',
-  // ── Pays prioritaires ──
+  // ── Pays ──
   'https://iptv-org.github.io/iptv/countries/fr.m3u',
   'https://iptv-org.github.io/iptv/countries/tr.m3u',
   // ── Free-TV (chaînes vérifiées) ──
   'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
 ];
-const EPG_URL='https://iptv-epg.org/files/epg-tr.xml.gz';
+const EPG_URLS=[
+  'https://iptv-epg.org/files/epg-fr.xml',
+  'https://iptv-epg.org/files/epg-tr.xml.gz'
+];
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
@@ -173,6 +189,7 @@ let currentCat='Toutes';
 let currentChannel=null;
 let hlsInstance=null;
 let searchQuery='';
+const deadChannels=new Set();
 
 // ── M3U8 Parser ──
 function parseM3U(text,startId){
@@ -233,6 +250,11 @@ const CAT_MAP={
   'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre','diversos':'Autre',
   'auto':'Auto','outdoor':'Nature','xxx':'Adulte','shop':'Shopping','legislative':'Politique',
   'series':'Séries',
+  // French group names from schumijo
+  'tnt':'TNT France','régionale':'Régional','locale':'Local',
+  'sport multiplex':'Sport','séries et divertissements':'Séries & Divertissement',
+  'jeunesse':'Enfants','actualités':'Info','découverte':'Découverte',
+  'style de vie / pratique':'Lifestyle','étrangère':'International',
   // Turkish group names from hayatiptv
   'ulusal':'Turquie','turk hd+ line':'Turquie','türk':'Turquie',
   'eski̇ usul':'Turquie','eski usul':'Turquie','eskİ usul':'Turquie',
@@ -322,7 +344,7 @@ function renderChannelList(){
   for(let i=0;i<limit;i++){
     const ch=visible[i];
     const item=document.createElement('button');
-    item.className='ch-item'+(currentChannel&&currentChannel.id===ch.id?' active':'');
+    item.className='ch-item'+(currentChannel&&currentChannel.id===ch.id?' active':'')+(deadChannels.has(ch.id)?' dead':'');
     item.innerHTML=
       logoHTML(ch,'ch-logo')+
       '<div class="ch-info"><div class="ch-name">'+ch.name+'</div><div class="ch-group">'+ch.group+'</div></div>';
@@ -346,7 +368,7 @@ function renderGrid(){
   for(let i=0;i<limit;i++){
     const ch=visible[i];
     const card=document.createElement('div');
-    card.className='card';
+    card.className='card'+(deadChannels.has(ch.id)?' dead':'');
     card.innerHTML=
       '<div class="card-top">'+
         logoHTML(ch,'card-logo')+
@@ -365,23 +387,32 @@ function renderGrid(){
 
 // ── Player ──
 function showErr(ch){
+  // Mark as dead
+  deadChannels.add(ch.id);
+  renderChannelList();
+  renderGrid();
+
   const overlay=document.getElementById('overlay');
   overlay.classList.remove('hidden');
   const url=ch.url;
   const isYT=url.includes('dailymotion')||url.includes('youtube');
   const isMPD=url.includes('.mpd');
-  let icon,msg;
+  let icon,reason;
   if(isYT){
-    icon='📺';
-    msg='<strong>'+ch.name+'</strong><br>Flux Dailymotion / YouTube<br><a href="'+url+'" target="_blank" rel="noopener">Ouvrir dans le navigateur</a>';
+    icon='📺';reason='Flux Dailymotion / YouTube';
   }else if(isMPD){
-    icon='⚠️';
-    msg='<strong>'+ch.name+'</strong><br>Format DASH non supporté<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a>';
+    icon='⚠️';reason='Format DASH non supporté';
   }else{
-    icon='⚠️';
-    msg='<strong>'+ch.name+'</strong><br>Flux indisponible ou hors ligne<br><a href="'+url+'" target="_blank" rel="noopener">Lien direct</a>';
+    icon='⚠️';reason='Flux indisponible ou hors ligne';
   }
-  overlay.innerHTML='<div class="icon">'+icon+'</div><div class="msg">'+msg+'</div>';
+  const{next}=getNeighbors();
+  overlay.innerHTML=
+    '<div class="icon">'+icon+'</div>'+
+    '<div class="msg"><strong>'+ch.name+'</strong><br>'+reason+'</div>'+
+    '<div class="err-actions">'+
+      (next?'<button class="err-btn primary" onclick="play('+next.id+')">Chaîne suivante &rarr;</button>':'')+
+      '<a class="err-btn" href="'+url+'" target="_blank" rel="noopener">Lien direct</a>'+
+    '</div>';
 }
 
 function proxyUrl(url,idx){

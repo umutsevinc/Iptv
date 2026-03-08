@@ -320,7 +320,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </button>
     </div>
   </div>
-  <video class="mini-player-video" id="player" controls playsinline webkit-playsinline></video>
+  <video class="mini-player-video" id="player" playsinline webkit-playsinline></video>
   <div class="player-overlay" id="overlay">
     <div class="icon">📡</div>
     <div class="msg">Sélectionnez une chaîne</div>
@@ -777,6 +777,9 @@ function startHls(ch,url,vid,attempt){
     maxBufferSize:30*1000*1000,
     startFragPrefetch:true,
     testBandwidth:false,
+    enableWebVTT:true,
+    enableCEA708Captions:true,
+    renderTextTracksNatively:true,
     xhrSetup:function(xhr){xhr.withCredentials=false}
   });
   hlsInstance.loadSource(url);
@@ -899,10 +902,34 @@ function play(id){
 // ── Fullscreen (native browser) ──
 function openFullPlayer(){
   const vid=document.getElementById('player');
+  vid.setAttribute('controls','');
+  // Enable subtitle/caption tracks if available
+  for(let i=0;i<vid.textTracks.length;i++){
+    vid.textTracks[i].mode='showing';
+  }
+  // Also enable HLS subtitle tracks
+  if(hlsInstance){
+    hlsInstance.subtitleDisplay=true;
+    if(hlsInstance.subtitleTracks.length>0&&hlsInstance.subtitleTrack===-1){
+      hlsInstance.subtitleTrack=0;
+    }
+  }
   if(vid.requestFullscreen)vid.requestFullscreen();
   else if(vid.webkitRequestFullscreen)vid.webkitRequestFullscreen();
   else if(vid.webkitEnterFullscreen)vid.webkitEnterFullscreen(); // iOS
 }
+
+// Remove controls when exiting fullscreen
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement){
+    document.getElementById('player').removeAttribute('controls');
+  }
+});
+document.addEventListener('webkitfullscreenchange',()=>{
+  if(!document.webkitFullscreenElement){
+    document.getElementById('player').removeAttribute('controls');
+  }
+});
 
 // ── Event listeners ──
 document.getElementById('expandBtn').addEventListener('click',openFullPlayer);

@@ -411,6 +411,19 @@ let searchQuery='';
 const deadChannels=new Set();
 let isFullPlayer=false;
 
+// ── Dead logo domains (DNS fails → console errors) ──
+const DEAD_LOGO_HOSTS=new Set();
+function isLogoValid(url){
+  if(!url)return false;
+  try{
+    const host=new URL(url).hostname;
+    return !DEAD_LOGO_HOSTS.has(host);
+  }catch(e){return false}
+}
+function markLogoDead(url){
+  try{DEAD_LOGO_HOSTS.add(new URL(url).hostname)}catch(e){}
+}
+
 // ── Play icon SVG ──
 const PLAY_SVG='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 
@@ -522,8 +535,9 @@ function getVisible(){
 function createCard(ch){
   const card=document.createElement('div');
   card.className='card'+(deadChannels.has(ch.id)?' dead':'')+(currentChannel&&currentChannel.id===ch.id?' playing':'');
-  const thumbContent=ch.logo
-    ?'<img src="'+ch.logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+  const hasLogo=isLogoValid(ch.logo);
+  const thumbContent=hasLogo
+    ?'<img src="'+ch.logo+'" alt="" loading="lazy" onerror="markLogoDead(this.src);this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       +'<span class="initials" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center">'+getInitials(ch.name)+'</span>'
     :'<span class="initials">'+getInitials(ch.name)+'</span>';
   card.innerHTML=

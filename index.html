@@ -193,6 +193,87 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{opacity:1}
 .mini-player.fake-fs:not(:hover) .mini-player-header,.mini-player.fake-fs:not(:hover) .mini-player-controls{opacity:0}
 .mini-player.fake-fs .mini-player-header,.mini-player.fake-fs .mini-player-controls{transition:opacity .3s}
+
+/* ═══ FULLSCREEN CHANNEL SIDEBAR ═══ */
+.fs-sidebar{
+  display:none;position:absolute;top:0;left:0;bottom:0;width:320px;
+  background:rgba(10,10,15,.95);z-index:10;flex-direction:column;
+  border-right:1px solid rgba(255,255,255,.1);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  transform:translateX(-100%);transition:transform .3s ease;
+}
+.fs-sidebar.open{transform:translateX(0)}
+:fullscreen .fs-sidebar,.fake-fs .fs-sidebar{display:flex}
+.fs-sidebar-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);
+  flex-shrink:0;
+}
+.fs-sidebar-title{font-size:14px;font-weight:600;color:#fff}
+.fs-sidebar-close{
+  width:28px;height:28px;border-radius:50%;border:none;
+  background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.fs-sidebar-close:hover{background:rgba(255,255,255,.25)}
+.fs-sidebar-search{
+  padding:8px 16px;flex-shrink:0;
+}
+.fs-sidebar-search input{
+  width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);color:#fff;font-size:13px;
+  font-family:'Inter',sans-serif;outline:none;
+}
+.fs-sidebar-search input::placeholder{color:rgba(255,255,255,.4)}
+.fs-sidebar-search input:focus{border-color:var(--accent)}
+.fs-sidebar-list{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;
+}
+.fs-sidebar-list::-webkit-scrollbar{width:5px}
+.fs-sidebar-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:3px}
+.fs-ch{
+  display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;
+  transition:background .15s;border-left:3px solid transparent;
+}
+.fs-ch:hover{background:rgba(255,255,255,.08)}
+.fs-ch.active{background:rgba(229,9,20,.15);border-left-color:var(--accent)}
+.fs-ch-logo{
+  width:36px;height:36px;border-radius:6px;object-fit:contain;
+  background:rgba(255,255,255,.05);flex-shrink:0;
+}
+.fs-ch-logo-placeholder{
+  width:36px;height:36px;border-radius:6px;flex-shrink:0;
+  background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;color:var(--text2);
+}
+.fs-ch-info{flex:1;min-width:0}
+.fs-ch-name{font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fs-ch-group{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Toggle sidebar button (visible in fullscreen) */
+.fs-sidebar-toggle{
+  display:none;position:absolute;top:50%;left:8px;transform:translateY(-50%);
+  z-index:8;width:36px;height:60px;border-radius:0 8px 8px 0;border:none;
+  background:rgba(0,0,0,.6);color:#fff;cursor:pointer;
+  align-items:center;justify-content:center;opacity:0;transition:opacity .3s;
+}
+:fullscreen .fs-sidebar-toggle,.fake-fs .fs-sidebar-toggle{display:flex}
+.mini-player:hover .fs-sidebar-toggle{opacity:1}
+.fs-sidebar-toggle:hover{background:rgba(0,0,0,.85)}
+.fs-sidebar-toggle svg{width:20px;height:20px}
+.fs-sidebar.open~.fs-sidebar-toggle{left:328px}
+
+/* Adjust video when sidebar open in fullscreen */
+:fullscreen .mini-player-video,.fake-fs .mini-player-video{transition:margin-left .3s ease}
+.fs-sidebar.open~video.mini-player-video{margin-left:320px;width:calc(100% - 320px)!important}
+
+@media(max-width:600px){
+  .fs-sidebar{width:260px}
+  .fs-sidebar.open~video.mini-player-video{margin-left:260px;width:calc(100% - 260px)!important}
+  .fs-sidebar.open~.fs-sidebar-toggle{left:268px}
+}
+
 .mini-nav-btn{
   padding:6px 12px;border-radius:6px;border:none;
   background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
@@ -305,6 +386,21 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </button>
     </div>
   </div>
+  <div class="fs-sidebar" id="fsSidebar">
+    <div class="fs-sidebar-header">
+      <span class="fs-sidebar-title">Chaînes</span>
+      <button class="fs-sidebar-close" id="fsSidebarClose" title="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="fs-sidebar-search">
+      <input type="text" id="fsSidebarSearch" placeholder="Rechercher une chaîne…">
+    </div>
+    <div class="fs-sidebar-list" id="fsSidebarList"></div>
+  </div>
+  <button class="fs-sidebar-toggle" id="fsSidebarToggle" title="Liste des chaînes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
   <video class="mini-player-video" id="player" playsinline webkit-playsinline></video>
   <div class="player-overlay" id="overlay">
     <div class="icon">📡</div>
@@ -841,6 +937,9 @@ function play(id){
 
   updateActiveCard(id);
 
+  // Refresh fullscreen sidebar if open
+  if(document.getElementById('fsSidebar').classList.contains('open'))populateFsSidebar();
+
   const vid=document.getElementById('player');
   const overlay=document.getElementById('overlay');
 
@@ -930,10 +1029,56 @@ document.addEventListener('webkitfullscreenchange',()=>{
 // Double-click on video toggles fullscreen
 document.getElementById('player').addEventListener('dblclick',toggleFullscreen);
 
-// Keyboard: Escape exits fullscreen, F toggles fullscreen
+// ── Fullscreen channel sidebar ──
+let fsSidebarFilter='';
+function populateFsSidebar(){
+  const list=document.getElementById('fsSidebarList');
+  list.innerHTML='';
+  const visible=getVisible();
+  const q=fsSidebarFilter.toLowerCase();
+  const filtered=q?visible.filter(c=>c.name.toLowerCase().includes(q)||c.group.toLowerCase().includes(q)):visible;
+  filtered.forEach(ch=>{
+    const row=document.createElement('div');
+    row.className='fs-ch'+(currentChannel&&currentChannel.id===ch.id?' active':'');
+    const logoHtml=ch.logo
+      ?'<img class="fs-ch-logo" src="'+ch.logo+'" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+        +'<div class="fs-ch-logo-placeholder" style="display:none">'+getInitials(ch.name)+'</div>'
+      :'<div class="fs-ch-logo-placeholder">'+getInitials(ch.name)+'</div>';
+    row.innerHTML=logoHtml+'<div class="fs-ch-info"><div class="fs-ch-name">'+ch.name+'</div><div class="fs-ch-group">'+ch.group+'</div></div>';
+    row.onclick=()=>{play(ch.id);populateFsSidebar()};
+    list.appendChild(row);
+  });
+  // Scroll active into view
+  const active=list.querySelector('.fs-ch.active');
+  if(active)active.scrollIntoView({block:'center',behavior:'smooth'});
+}
+
+function toggleFsSidebar(){
+  const sb=document.getElementById('fsSidebar');
+  const opening=!sb.classList.contains('open');
+  sb.classList.toggle('open');
+  if(opening)populateFsSidebar();
+}
+
+document.getElementById('fsSidebarToggle').addEventListener('click',toggleFsSidebar);
+document.getElementById('fsSidebarClose').addEventListener('click',()=>{
+  document.getElementById('fsSidebar').classList.remove('open');
+});
+
+document.getElementById('fsSidebarSearch').addEventListener('input',(e)=>{
+  fsSidebarFilter=e.target.value;
+  populateFsSidebar();
+});
+
+// Keyboard: Escape exits fullscreen, F toggles fullscreen, C toggles sidebar
 document.addEventListener('keydown',(e)=>{
-  if(e.key==='Escape'&&isFullscreen()){exitFullPlayer();e.preventDefault()}
-  if(e.key==='f'||e.key==='F'){if(currentChannel){toggleFullscreen();e.preventDefault()}}
+  if(e.key==='Escape'&&isFullscreen()){
+    const sb=document.getElementById('fsSidebar');
+    if(sb.classList.contains('open')){sb.classList.remove('open');e.preventDefault();return}
+    exitFullPlayer();e.preventDefault();
+  }
+  if(e.key==='f'||e.key==='F'){if(currentChannel&&document.activeElement.tagName!=='INPUT'){toggleFullscreen();e.preventDefault()}}
+  if(e.key==='c'||e.key==='C'){if(isFullscreen()&&document.activeElement.tagName!=='INPUT'){toggleFsSidebar();e.preventDefault()}}
 });
 
 // ── Event listeners ──

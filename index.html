@@ -403,6 +403,7 @@ const PLAYLIST_URLS=[
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
 let CHANNELS=[];
+const CHANNEL_MAP=new Map(); // fast lookup by id
 let categories=new Map();
 let currentCat='Toutes';
 let currentChannel=null;
@@ -410,6 +411,7 @@ let hlsInstance=null;
 let searchQuery='';
 const deadChannels=new Set();
 let isFullPlayer=false;
+let activeCardId=null; // track active card without full re-render
 
 // ── Dead logo domains (DNS/TLS fails → console errors) ──
 const DEAD_LOGO_HOSTS=new Set([
@@ -548,6 +550,7 @@ function createCard(ch){
   card.innerHTML=
     '<div class="card-thumb">'+thumbContent+'<div class="card-play">'+PLAY_SVG+'</div></div>'+
     '<div class="card-body"><div class="card-name">'+ch.name+'</div><div class="card-group">'+ch.group+'</div></div>';
+  card._chId=ch.id;
   card.onclick=()=>play(ch.id);
   return card;
 }
@@ -661,9 +664,22 @@ function renderContent(){
 // ── Player logic ──
 function proxyUrl(url,idx){return CORS_PROXIES[idx]+encodeURIComponent(url)}
 
+// Safari detection (cached once)
+const IS_SAFARI=/^((?!chrome|android).)*safari/i.test(navigator.userAgent)||
+  (navigator.userAgent.includes('AppleWebKit')&&!navigator.userAgent.includes('Chrome'));
+
 function startHls(ch,url,vid,attempt){
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
-  hlsInstance=new Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:30,maxMaxBufferLength:60,xhrSetup:function(xhr){xhr.withCredentials=false}});
+  hlsInstance=new Hls({
+    enableWorker:true,
+    lowLatencyMode:true,
+    maxBufferLength:10,       // start playing faster
+    maxMaxBufferLength:30,
+    maxBufferSize:30*1000*1000,
+    startFragPrefetch:true,   // prefetch next fragment
+    testBandwidth:false,      // skip bandwidth test → faster start
+    xhrSetup:function(xhr){xhr.withCredentials=false}
+  });
   hlsInstance.loadSource(url);
   hlsInstance.attachMedia(vid);
   hlsInstance.on(Hls.Events.MANIFEST_PARSED,()=>{
@@ -711,35 +727,46 @@ function getNeighbors(){
   };
 }
 
+function updateActiveCard(newId){
+  // Remove old active
+  if(activeCardId!==null){
+    const old=document.querySelector('.card.playing');
+    if(old){old.classList.remove('playing');old.querySelector('.pulse-dot')?.remove()}
+  }
+  // Set new active
+  activeCardId=newId;
+  const cards=document.querySelectorAll('.card');
+  for(const c of cards){
+    if(c._chId===newId){c.classList.add('playing');break}
+  }
+}
+
 function play(id){
-  const ch=CHANNELS.find(c=>c.id===id);
+  const ch=CHANNEL_MAP.get(id);
   if(!ch)return;
+
+  // Kill previous stream immediately
+  if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
+
   currentChannel=ch;
 
-  // Show mini player
-  const mini=document.getElementById('miniPlayer');
-  mini.classList.add('visible');
+  // Update mini player UI (lightweight, no DOM rebuild)
+  document.getElementById('miniPlayer').classList.add('visible');
   document.getElementById('miniName').textContent=ch.name;
   document.getElementById('miniGroup').textContent=ch.group;
+  document.getElementById('fullName').textContent=ch.name;
+  document.getElementById('fullGroup').textContent=ch.group;
 
-  // Update nav
+  // Update nav buttons
   const{prev,next}=getNeighbors();
   document.getElementById('miniPrevBtn').onclick=prev?()=>play(prev.id):null;
   document.getElementById('miniNextBtn').onclick=next?()=>play(next.id):null;
 
-  // Update full player info
-  document.getElementById('fullName').textContent=ch.name;
-  document.getElementById('fullGroup').textContent=ch.group;
-
-  // Re-render to show active card
-  renderContent();
-
-  if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
+  // Update active card highlight without re-rendering
+  updateActiveCard(id);
 
   const vid=document.getElementById('player');
   const overlay=document.getElementById('overlay');
-  vid.removeAttribute('src');
-  vid.load();
 
   const url=ch.url;
   const isYT=url.includes('dailymotion')||url.includes('youtube');
@@ -750,21 +777,18 @@ function play(id){
   overlay.classList.remove('hidden');
   overlay.innerHTML='<div class="icon">⏳</div><div class="msg">Chargement…</div>';
 
+  // Start new stream directly (no vid.removeAttribute + vid.load delay)
   const safeUrl=url.startsWith('http://')?proxyUrl(url,0):url;
   const startAttempt=url.startsWith('http://')?1:0;
 
-  const isSafari=/^((?!chrome|android).)*safari/i.test(navigator.userAgent)||
-    (navigator.userAgent.includes('AppleWebKit')&&!navigator.userAgent.includes('Chrome'));
-
-  if(isSafari&&vid.canPlayType('application/vnd.apple.mpegurl')){
+  if(IS_SAFARI&&vid.canPlayType('application/vnd.apple.mpegurl')){
     overlay.classList.add('hidden');
     vid.src=safeUrl;
-    vid.load();
     vid.play().catch(()=>{});
     vid.onerror=()=>{
       if(startAttempt<CORS_PROXIES.length&&vid.src===safeUrl){
         vid.src=proxyUrl(ch.url,startAttempt);
-        vid.load();vid.play().catch(()=>{});
+        vid.play().catch(()=>{});
         vid.onerror=()=>showErr(ch);
       }else{showErr(ch)}
     };
@@ -875,6 +899,7 @@ async function init(){
     for(const ch of parsed){
       if(seen.has(ch.url))continue;
       seen.add(ch.url);
+      CHANNEL_MAP.set(ch.id,ch);
       CHANNELS.push(ch);
     }
     loaded++;
@@ -885,7 +910,7 @@ async function init(){
       '<div class="loading-screen"><div style="font-size:48px">❌</div><div>Impossible de charger les playlists</div></div>';
     return;
   }
-  CHANNELS.forEach((ch,i)=>ch.id=i);
+  CHANNELS.forEach((ch,i)=>{ch.id=i;CHANNEL_MAP.set(i,ch)});
   updateUI();
 }
 

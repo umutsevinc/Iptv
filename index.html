@@ -241,38 +241,65 @@ function parseM3U(text,startId){
 
 // ── Normalize category names ──
 const CAT_MAP={
+  // ── Cinéma & Séries ──
+  'movies':'Cinéma','movie':'Cinéma','cinema':'Cinéma','cinéma':'Cinéma',
+  'film':'Cinéma','films':'Cinéma','películas':'Cinéma','sinema':'Cinéma',
+  'series':'Séries','séries':'Séries','drama':'Séries','drame':'Séries',
+  'séries et divertissements':'Séries & Divertissement',
+  'comedy':'Comédie','classic':'Classique','animation':'Animation',
+  // ── Sport ──
   'sports':'Sport','sport':'Sport','deportes':'Sport','spor':'Sport',
-  'news':'Info','information':'Info','actualités':'Info','noticias':'Info','haber':'Info','haberler':'Info',
-  'movies':'Films','movie':'Films','cinema':'Films','cinéma':'Films','film':'Films','películas':'Films','sinema':'Films',
+  'sport multiplex':'Sport',
+  // ── Info ──
+  'news':'Info','information':'Info','actualités':'Info','noticias':'Info',
+  'haber':'Info','haberler':'Info',
+  // ── Divertissement ──
+  'entertainment':'Divertissement','divertissement':'Divertissement',
+  'entretenimiento':'Divertissement','eğlence':'Divertissement',
+  // ── Musique ──
   'music':'Musique','musique':'Musique','música':'Musique','müzik':'Musique',
-  'documentary':'Documentaire','documentaire':'Documentaire','documental':'Documentaire','belgesel':'Documentaire',
-  'entertainment':'Divertissement','divertissement':'Divertissement','entretenimiento':'Divertissement','eğlence':'Divertissement',
-  'kids':'Enfants','children':'Enfants','infantil':'Enfants','çocuk':'Enfants','enfants':'Enfants',
-  'education':'Éducation','éducation':'Éducation','educación':'Éducation','eğitim':'Éducation',
-  'religious':'Religion','religion':'Religion','religión':'Religion','dini':'Religion',
-  'lifestyle':'Lifestyle','culture':'Culture','food':'Cuisine','cooking':'Cuisine',
-  'travel':'Voyage','weather':'Météo','business':'Business','science':'Science',
-  'comedy':'Comédie','animation':'Animation','classic':'Classique','drama':'Drame',
-  'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre','diversos':'Autre',
-  'auto':'Auto','outdoor':'Nature','xxx':'Adulte','shop':'Shopping','legislative':'Politique',
-  'series':'Séries',
-  // French group names from schumijo
+  // ── Enfants ──
+  'kids':'Enfants','children':'Enfants','infantil':'Enfants','çocuk':'Enfants',
+  'enfants':'Enfants','jeunesse':'Enfants','animasyon':'Animation',
+  // ── Documentaire & Découverte ──
+  'documentary':'Documentaire','documentaire':'Documentaire','documental':'Documentaire',
+  'belgesel':'Documentaire','belge':'Documentaire',
+  'découverte':'Découverte','outdoor':'Nature','doğa':'Nature',
+  // ── Culture & Lifestyle ──
+  'lifestyle':'Lifestyle','culture':'Culture','style de vie / pratique':'Lifestyle',
+  'food':'Cuisine','cooking':'Cuisine','travel':'Voyage',
+  // ── Éducation & Science ──
+  'education':'Éducation','éducation':'Éducation','educación':'Éducation',
+  'eğitim':'Éducation','science':'Science',
+  // ── France (TNT, régional, local) ──
   'tnt':'TNT France','régionale':'Régional','locale':'Local',
-  'sport multiplex':'Sport','séries et divertissements':'Séries & Divertissement',
-  'jeunesse':'Enfants','actualités':'Info','découverte':'Découverte',
-  'style de vie / pratique':'Lifestyle','étrangère':'International',
-  // FAST services (Pluto, Samsung, Plex)
+  // ── FAST Services ──
   'pluto tv':'Pluto TV','samsung tv plus':'Samsung TV+','plex':'Plex',
-  'films':'Cinéma','movies':'Cinéma','film':'Cinéma',
-  'séries':'Séries','series':'Séries',
-  // Turkish group names from hayatiptv
+  // ── Turquie ──
   'ulusal':'Turquie','turk hd+ line':'Turquie','türk':'Turquie',
   'eski̇ usul':'Turquie','eski usul':'Turquie','eskİ usul':'Turquie',
-  'radyo':'Radio','radyo türk':'Radio',
   'bölgesel':'Régional','yerel':'Régional',
-  'cocuk':'Enfants','animasyon':'Animation',
-  'belge':'Documentaire','doğa':'Nature'
+  // ── Autres ──
+  'religious':'Religion','religion':'Religion','religión':'Religion','dini':'Religion',
+  'radyo':'Radio','radyo türk':'Radio',
+  'weather':'Météo','business':'Business','auto':'Auto',
+  'legislative':'Politique','étrangère':'International',
+  'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre',
+  'diversos':'Autre','xxx':'Adulte','shop':'Shopping'
 };
+
+// Ordre d'affichage des catégories (après "Toutes")
+const CAT_ORDER=[
+  'TNT France','Cinéma','Séries','Séries & Divertissement','Comédie',
+  'Sport','Info','Divertissement','Musique','Enfants','Animation',
+  'Documentaire','Découverte','Nature','Classique',
+  'Régional','Local','International',
+  'Pluto TV','Samsung TV+','Plex',
+  'Turquie','Lifestyle','Cuisine','Voyage',
+  'Éducation','Science','Culture',
+  'Religion','Radio','Météo','Business','Auto','Politique',
+  'Généraliste','Autre'
+];
 
 function cleanGroup(raw){
   if(!raw)return 'Autre';
@@ -302,8 +329,13 @@ function buildCategories(){
     groups.get(g).push(ch);
   });
 
-  // Sort groups by channel count (descending)
-  const sorted=[...groups.entries()].sort((a,b)=>b[1].length-a[1].length);
+  // Sort groups by predefined order, then alphabetically for unlisted ones
+  const sorted=[...groups.entries()].sort((a,b)=>{
+    const ia=CAT_ORDER.indexOf(a[0]),ib=CAT_ORDER.indexOf(b[0]);
+    const oa=ia>=0?ia:CAT_ORDER.length,ob=ib>=0?ib:CAT_ORDER.length;
+    if(oa!==ob)return oa-ob;
+    return a[0].localeCompare(b[0],'fr');
+  });
   sorted.forEach(([g,chs])=>categories.set(g,chs));
 }
 

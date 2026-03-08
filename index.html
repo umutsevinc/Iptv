@@ -156,7 +156,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   transition:all .4s cubic-bezier(.4,0,.2,1);
 }
 .mini-player.visible{transform:translateY(0) scale(1);opacity:1}
-.mini-player.hidden-for-full{transform:translateY(120%) scale(.9);opacity:0}
 .mini-player-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:8px 12px;background:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.6));
@@ -194,33 +193,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .mini-nav-btn svg{width:14px;height:14px}
 .mini-nav-spacer{flex:1}
 
-/* ═══ EXPANDED PLAYER (full overlay) ═══ */
-.full-player-overlay{
-  position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.92);
-  display:flex;align-items:center;justify-content:center;
-  opacity:0;pointer-events:none;transition:opacity .3s;
-}
-.full-player-overlay.visible{opacity:1;pointer-events:all}
-.full-player-wrap{
-  width:90%;max-width:1100px;aspect-ratio:16/9;position:relative;
-  border-radius:12px;overflow:hidden;background:#000;
-}
-.full-player-wrap video{width:100%;height:100%;object-fit:contain}
-.full-player-close{
-  position:absolute;top:16px;right:16px;z-index:10;
-  width:40px;height:40px;border-radius:50%;border:none;
-  background:rgba(0,0,0,.7);color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all .2s;
-}
-.full-player-close:hover{background:var(--accent)}
-.full-player-close svg{width:20px;height:20px}
-.full-player-info{
-  position:absolute;bottom:0;left:0;right:0;padding:20px 24px;
-  background:linear-gradient(transparent,rgba(0,0,0,.9));
-}
-.full-player-name{font-size:20px;font-weight:700}
-.full-player-group{font-size:14px;color:var(--text2);margin-top:2px}
 
 /* ═══ SEARCH RESULTS GRID ═══ */
 .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:0 4%}
@@ -348,7 +320,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       </button>
     </div>
   </div>
-  <video class="mini-player-video" id="player" playsinline webkit-playsinline></video>
+  <video class="mini-player-video" id="player" controls playsinline webkit-playsinline></video>
   <div class="player-overlay" id="overlay">
     <div class="icon">📡</div>
     <div class="msg">Sélectionnez une chaîne</div>
@@ -366,19 +338,6 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   </div>
 </div>
 
-<!-- ═══ FULL PLAYER OVERLAY ═══ -->
-<div class="full-player-overlay" id="fullOverlay">
-  <div class="full-player-wrap">
-    <video class="full-player-video" id="fullPlayer" controls playsinline webkit-playsinline></video>
-    <button class="full-player-close" id="fullCloseBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
-    <div class="full-player-info">
-      <div class="full-player-name" id="fullName"></div>
-      <div class="full-player-group" id="fullGroup"></div>
-    </div>
-  </div>
-</div>
 
 <script>
 const PLAYLIST_URLS=[
@@ -421,7 +380,6 @@ let currentChannel=null;
 let hlsInstance=null;
 let searchQuery='';
 const deadChannels=new Set();
-let isFullPlayer=false;
 let activeCardId=null;
 
 // ── Pagination state ──
@@ -897,11 +855,8 @@ function play(id){
   // Show mini player
   const mini=document.getElementById('miniPlayer');
   mini.classList.add('visible');
-  mini.classList.remove('hidden-for-full');
   document.getElementById('miniName').textContent=ch.name;
   document.getElementById('miniGroup').textContent=ch.group;
-  document.getElementById('fullName').textContent=ch.name;
-  document.getElementById('fullGroup').textContent=ch.group;
 
   const{prev,next}=getNeighbors();
   document.getElementById('miniPrevBtn').onclick=prev?()=>play(prev.id):null;
@@ -941,61 +896,16 @@ function play(id){
   }
 }
 
-// ── Expand / Collapse full player ──
+// ── Fullscreen (native browser) ──
 function openFullPlayer(){
-  isFullPlayer=true;
-  const fullOverlay=document.getElementById('fullOverlay');
-  const fullVid=document.getElementById('fullPlayer');
-  const miniVid=document.getElementById('player');
-
-  // Hide mini player
-  document.getElementById('miniPlayer').classList.add('hidden-for-full');
-
-  fullOverlay.classList.add('visible');
-
-  if(hlsInstance){
-    hlsInstance.detachMedia();
-    hlsInstance.attachMedia(fullVid);
-    fullVid.play().catch(()=>{});
-  }else if(miniVid.src){
-    fullVid.src=miniVid.src;
-    fullVid.currentTime=miniVid.currentTime;
-    fullVid.play().catch(()=>{});
-  }
-  // Pause mini
-  miniVid.pause();
-}
-
-function closeFullPlayer(){
-  isFullPlayer=false;
-  const fullOverlay=document.getElementById('fullOverlay');
-  const fullVid=document.getElementById('fullPlayer');
-  const miniVid=document.getElementById('player');
-
-  fullOverlay.classList.remove('visible');
-  // Show mini player again
-  document.getElementById('miniPlayer').classList.remove('hidden-for-full');
-
-  if(hlsInstance){
-    hlsInstance.detachMedia();
-    hlsInstance.attachMedia(miniVid);
-    miniVid.play().catch(()=>{});
-  }else if(fullVid.src){
-    miniVid.src=fullVid.src;
-    miniVid.currentTime=fullVid.currentTime;
-    miniVid.play().catch(()=>{});
-  }
-  fullVid.pause();
-  fullVid.removeAttribute('src');
-  fullVid.load();
+  const vid=document.getElementById('player');
+  if(vid.requestFullscreen)vid.requestFullscreen();
+  else if(vid.webkitRequestFullscreen)vid.webkitRequestFullscreen();
+  else if(vid.webkitEnterFullscreen)vid.webkitEnterFullscreen(); // iOS
 }
 
 // ── Event listeners ──
 document.getElementById('expandBtn').addEventListener('click',openFullPlayer);
-document.getElementById('fullCloseBtn').addEventListener('click',closeFullPlayer);
-document.getElementById('fullOverlay').addEventListener('click',e=>{
-  if(e.target===e.currentTarget)closeFullPlayer();
-});
 document.getElementById('closePlayerBtn').addEventListener('click',()=>{
   if(hlsInstance){hlsInstance.destroy();hlsInstance=null}
   const vid=document.getElementById('player');

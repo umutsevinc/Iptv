@@ -169,6 +169,9 @@ const PLAYLIST_URLS=[
   'https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/plutotv_fr.m3u',
   'https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/samsungtvplus_fr.m3u',
   'https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/plex_fr.m3u',
+  // ── Turquie (chaînes avec streams vérifiés) ──
+  'https://raw.githubusercontent.com/hayatiptv/iptv/master/index.m3u',
+  'https://raw.githubusercontent.com/hayatiptv/iptv/master/SPORTV.m3u',
   // ── Catégories iptv-org ──
   'https://iptv-org.github.io/iptv/categories/sports.m3u',
   'https://iptv-org.github.io/iptv/categories/news.m3u',
@@ -179,11 +182,13 @@ const PLAYLIST_URLS=[
   'https://iptv-org.github.io/iptv/categories/kids.m3u',
   // ── Pays ──
   'https://iptv-org.github.io/iptv/countries/fr.m3u',
+  'https://iptv-org.github.io/iptv/countries/tr.m3u',
   // ── Free-TV (chaînes vérifiées) ──
   'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',
 ];
 const EPG_URLS=[
   'https://iptv-epg.org/files/epg-fr.xml',
+  'https://iptv-epg.org/files/epg-tr.xml.gz'
 ];
 const CORS_PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
 
@@ -246,33 +251,40 @@ const CAT_MAP={
   'séries et divertissements':'Séries & Divertissement',
   'comedy':'Comédie','classic':'Classique','animation':'Animation',
   // ── Sport ──
-  'sports':'Sport','sport':'Sport','deportes':'Sport',
+  'sports':'Sport','sport':'Sport','deportes':'Sport','spor':'Sport',
   'sport multiplex':'Sport',
   // ── Info ──
   'news':'Info','information':'Info','actualités':'Info','noticias':'Info',
+  'haber':'Info','haberler':'Info',
   // ── Divertissement ──
   'entertainment':'Divertissement','divertissement':'Divertissement',
-  'entretenimiento':'Divertissement',
+  'entretenimiento':'Divertissement','eğlence':'Divertissement',
   // ── Musique ──
-  'music':'Musique','musique':'Musique','música':'Musique',
+  'music':'Musique','musique':'Musique','música':'Musique','müzik':'Musique',
   // ── Enfants ──
-  'kids':'Enfants','children':'Enfants','infantil':'Enfants',
-  'enfants':'Enfants','jeunesse':'Enfants',
+  'kids':'Enfants','children':'Enfants','infantil':'Enfants','çocuk':'Enfants',
+  'enfants':'Enfants','jeunesse':'Enfants','animasyon':'Animation',
   // ── Documentaire & Découverte ──
   'documentary':'Documentaire','documentaire':'Documentaire','documental':'Documentaire',
-  'découverte':'Découverte','outdoor':'Nature',
+  'belgesel':'Documentaire','belge':'Documentaire',
+  'découverte':'Découverte','outdoor':'Nature','doğa':'Nature',
   // ── Culture & Lifestyle ──
   'lifestyle':'Lifestyle','culture':'Culture','style de vie / pratique':'Lifestyle',
   'food':'Cuisine','cooking':'Cuisine','travel':'Voyage',
   // ── Éducation & Science ──
   'education':'Éducation','éducation':'Éducation','educación':'Éducation',
-  'science':'Science',
+  'eğitim':'Éducation','science':'Science',
   // ── France (TNT, régional, local) ──
   'tnt':'TNT France','régionale':'Régional','locale':'Local',
   // ── FAST Services ──
   'pluto tv':'Pluto TV','samsung tv plus':'Samsung TV+','plex':'Plex',
+  // ── Turquie ──
+  'ulusal':'Turquie','turk hd+ line':'Turquie','türk':'Turquie',
+  'eski̇ usul':'Turquie','eski usul':'Turquie','eskİ usul':'Turquie',
+  'bölgesel':'Régional','yerel':'Régional',
   // ── Autres ──
-  'religious':'Religion','religion':'Religion','religión':'Religion',
+  'religious':'Religion','religion':'Religion','religión':'Religion','dini':'Religion',
+  'radyo':'Radio','radyo türk':'Radio',
   'weather':'Météo','business':'Business','auto':'Auto',
   'legislative':'Politique','étrangère':'International',
   'general':'Généraliste','undefined':'Autre','other':'Autre','misc':'Autre',
@@ -286,7 +298,7 @@ const CAT_ORDER=[
   'Documentaire','Découverte','Nature','Classique',
   'Régional','Local','International',
   'Pluto TV','Samsung TV+','Plex',
-  'Lifestyle','Cuisine','Voyage',
+  'Turquie','Lifestyle','Cuisine','Voyage',
   'Éducation','Science','Culture',
   'Religion','Radio','Météo','Business','Auto','Politique',
   'Généraliste','Autre'
@@ -294,11 +306,15 @@ const CAT_ORDER=[
 
 function cleanGroup(raw){
   if(!raw)return 'Autre';
-  const low=raw.toLowerCase().trim();
+  const low=raw.toLowerCase().trim()
+    .replace(/İ/g,'i').replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c');
+  // Normalize Turkish İ in original too
+  const lowOrig=raw.toLowerCase().trim();
+  if(CAT_MAP[lowOrig])return CAT_MAP[lowOrig];
   if(CAT_MAP[low])return CAT_MAP[low];
   // Try partial match
   for(const[key,val] of Object.entries(CAT_MAP)){
-    if(low.includes(key))return val;
+    if(low.includes(key)||lowOrig.includes(key))return val;
   }
   // Capitalize first letter
   return raw.charAt(0).toUpperCase()+raw.slice(1);
